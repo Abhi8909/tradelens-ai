@@ -37,6 +37,15 @@ npm run build               # after npm install, builds the web frontend
 
 The Node API and domain tests run independently of external packages, using Node 22's experimental TypeScript type stripping (you may see an experimental warning). The web app depends on React/Vite from npm.
 
+## Thesis journal (browser-local)
+
+The **Thesis journal** tab records a user-written trade thesis: instrument, hypothesis, supporting and opposing evidence, invalidation criteria and time horizon. Each save appends a new version with its own as-of timestamp; earlier versions, including the original, are never rewritten and can be viewed read-only.
+
+- Stored only in this browser's `localStorage` under `tradelens-thesis-journal` (schema version 1). Nothing is sent to the API.
+- If stored data can't be read, or was written by a newer schema version, the app leaves it untouched and disables saving until you choose to back it up (copied to a `tradelens-thesis-journal.backup.<timestamp>` key) and start a new journal.
+- Domain rules and storage handling live in `packages/core/src/thesis.ts` and `packages/core/src/thesisStore.ts`.
+- A thesis is the user's own reasoning. TradeLens does not evaluate it, and it is not investment advice.
+
 ## Repository layout
 
 ```text

@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bell,
   BookOpen, CheckCircle2, ChevronRight, FlaskConical, Github, LayoutDashboard,
-  LineChart, Search, ShieldCheck, Sparkles, Star, Wallet, AlertTriangle
+  LineChart, NotebookPen, Search, ShieldCheck, Sparkles, Star, Wallet, AlertTriangle
 } from 'lucide-react';
 import type { PositionScenarioInput, PositionScenarioResult, StockSummary } from '../../../packages/core/src/types.ts';
 import CandleChart from './CandleChart.tsx';
+import ThesisJournal from './ThesisJournal.tsx';
 
-type Tab = 'overview' | 'screener' | 'simulator' | 'roadmap';
+type Tab = 'overview' | 'screener' | 'simulator' | 'journal' | 'roadmap';
 type StocksPayload = { data: StockSummary[]; count: number; source: string };
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 const pct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
@@ -15,6 +16,7 @@ const nav: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'screener', label: 'Stock screener', icon: Search },
   { id: 'simulator', label: 'Scenario lab', icon: FlaskConical },
+  { id: 'journal', label: 'Thesis journal', icon: NotebookPen },
   { id: 'roadmap', label: 'Build roadmap', icon: BookOpen }
 ];
 
@@ -160,7 +162,7 @@ export default function App() {
     </aside>
     <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> DEMO MODE</span><span className="avatar-user">TL</span></div></div>
       <div className="content"><div className="demo-banner"><AlertTriangle size={18}/><span><strong>Synthetic market data.</strong> All tickers, prices and returns are fictional and generated for testing. Nothing here is live NSE data or investment advice.</span></div>
-        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? 'Explore demo price data and rule-based research signals.' : tab === 'screener' ? 'Filter synthetic companies by moving-average trend and RSI.' : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
+        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'journal' ? 'Thesis journal' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? 'Explore demo price data and rule-based research signals.' : tab === 'screener' ? 'Filter synthetic companies by moving-average trend and RSI.' : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
         {loadError && <div role="alert" className="error-panel">Cannot load the API: {loadError}. Run <code>npm run dev:api</code> in another terminal or <code>npm run dev</code> from the repository root.</div>}
         {tab === 'overview' && <>
           <div className="metrics"><Metric label="Demo instruments" value={String(stocks.length).padStart(2, '0')} sub="Fictional companies" icon={<BarChart3 size={20}/>}/><Metric label="Positive daily change" value={String(rising).padStart(2, '0')} sub="Of synthetic instruments" icon={<ArrowUpRight size={20}/>}/><Metric label="Above 20-day SMA" value={String(bullish).padStart(2, '0')} sub="Rules-based signal" icon={<Activity size={20}/>}/><Metric label="Average demo change" value={pct(avgMove)} sub="Not a real market index" icon={<LineChart size={20}/>}/></div>
@@ -168,6 +170,7 @@ export default function App() {
         </>}
         {tab === 'screener' && <div className="panel screen"><div className="section-head"><div><p className="eyebrow">SCREENING CONDITIONS</p><h3>Filter the universe</h3></div><span className="tag">{filtered.length} results</span></div><div className="filters"><label className="search-field"><Search size={18}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search a demo company" aria-label="Search demo stocks"/></label><label><span>20-day trend</span><select value={trend} onChange={e => setTrend(e.target.value)}><option value="all">All</option><option value="above-sma">Above SMA</option><option value="below-sma">Below SMA</option></select></label><label><span>Min RSI</span><input type="number" min="0" max="100" value={minRsi} onChange={e => setMinRsi(e.target.value)}/></label><label><span>Max RSI</span><input type="number" min="0" max="100" value={maxRsi} onChange={e => setMaxRsi(e.target.value)}/></label></div><StockTable stocks={filtered} selected={selectedSymbol} onSelect={selectStock} watchlist={watchlist} onWatch={toggleWatch}/></div>}
         {tab === 'simulator' && <ScenarioLab stock={selected}/>}
+        {tab === 'journal' && <ThesisJournal stocks={stocks} defaultSymbol={selected?.symbol ?? 'DEMO-ALPHA'}/>}
         {tab === 'roadmap' && <Roadmap/>}
         <div className="footer"><span><CheckCircle2 size={15}/> Read-only demo · no broker connection</span><span><Wallet size={15}/> No personal financial data collected</span></div>
       </div>
