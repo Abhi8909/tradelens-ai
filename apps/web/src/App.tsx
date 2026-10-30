@@ -5,6 +5,7 @@ import {
   LineChart, Search, ShieldCheck, Sparkles, Star, Wallet, AlertTriangle
 } from 'lucide-react';
 import type { PositionScenarioInput, PositionScenarioResult, StockSummary } from '../../../packages/core/src/types.ts';
+import CandleChart from './CandleChart.tsx';
 
 type Tab = 'overview' | 'screener' | 'simulator' | 'roadmap';
 type StocksPayload = { data: StockSummary[]; count: number; source: string };
@@ -58,7 +59,7 @@ function StockDetail({ stock }: { stock: StockSummary | undefined }) {
   return <div className="panel detail">
     <div className="section-head"><div><p className="eyebrow">RESEARCH SNAPSHOT</p><h3>{stock.symbol}</h3><p className="muted">{stock.name} · {stock.sector}</p></div><span className="tag">Rules-based</span></div>
     <div className="detail-price"><div><span className="big-price">{rupees.format(stock.lastClose)}</span><div className={`change ${stock.changePct >= 0 ? 'up' : 'down'}`}>{pct(stock.changePct)} vs previous demo close</div></div></div>
-    <div className="detail-chart"><Sparkline values={stock.sparkline} positive={stock.changePct >= 0} height={118}/></div>
+    <CandleChart symbol={stock.symbol}/>
     <div className="detail-kpis"><div><span>20-day SMA</span><strong>{stock.sma20 ? rupees.format(stock.sma20) : 'N/A'}</strong></div><div><span>RSI (14)</span><strong>{stock.rsi14?.toFixed(1) ?? 'N/A'}</strong></div></div>
     <div className="insight"><div className="insight-title"><Activity size={16}/> Deterministic insight</div><p>The demo closing price is <strong>{stock.trend === 'above-sma' ? 'above' : 'below'}</strong> its 20-day simple moving average. RSI is {stock.rsi14?.toFixed(1) ?? 'unavailable'}. This describes synthetic historical data only; it is not a buy/sell recommendation.</p></div>
     <div className="coming"><Sparkles size={16}/><div><strong>AI research assistant — planned</strong><p>Grounded analysis, financial filings, source citations, and opposing arguments will be built in a later milestone.</p></div></div>

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { URL } from 'node:url';
 import { listStocks, getStock, getCandles } from './market.ts';
 import { simulatePosition } from '../../../packages/core/src/scenario.ts';
+import { MAX_CANDLE_LIMIT, latestCandles, parseCandleLimit } from '../../../packages/core/src/chart.ts';
 import type { PositionScenarioInput } from '../../../packages/core/src/types.ts';
 
 const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
@@ -55,7 +56,12 @@ export function createApp() {
         const symbol = match[1];
         const stock = getStock(symbol);
         if (!stock) return send(response, 404, { error: 'Unknown demo symbol' });
-        if (match[2] === 'candles') return send(response, 200, { source: 'synthetic-demo', symbol, candles: getCandles(symbol) });
+        if (match[2] === 'candles') {
+          const limit = parseCandleLimit(url.searchParams.get('limit'));
+          if (limit === null) return send(response, 400, { error: `limit must be an integer from 1 to ${MAX_CANDLE_LIMIT}` });
+          const candles = latestCandles(getCandles(symbol) ?? [], limit);
+          return send(response, 200, { source: 'synthetic-demo', symbol, requested: limit, count: candles.length, candles });
+        }
         return send(response, 200, { source: 'synthetic-demo', stock });
       }
       if (request.method === 'POST' && path === '/api/scenarios') {

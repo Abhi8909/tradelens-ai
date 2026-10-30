@@ -31,6 +31,32 @@ test('screener filters demo stocks and provides reproducible candles', async () 
   assert.equal((await fetch(`${base}/api/stocks/DEMO-WHATEVER`)).status, 404);
 }));
 
+test('candles endpoint returns the latest N sessions for a valid limit', async () => withApi(async (base) => {
+  const all = (await (await fetch(`${base}/api/stocks/DEMO-BETA/candles`)).json());
+  assert.equal(all.requested, 90);
+  assert.equal(all.count, 90);
+  for (const limit of [1, 20, 60, 90]) {
+    const response = await fetch(`${base}/api/stocks/DEMO-BETA/candles?limit=${limit}`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.source, 'synthetic-demo');
+    assert.equal(body.requested, limit);
+    assert.equal(body.count, limit);
+    assert.deepEqual(body.candles, all.candles.slice(-limit), 'window ends at the latest session');
+  }
+}));
+
+test('candles endpoint rejects invalid limits without returning data', async () => withApi(async (base) => {
+  for (const raw of ['0', '-1', '91', '1.5', 'abc', '20abc', '', '1e1', '%2020']) {
+    const response = await fetch(`${base}/api/stocks/DEMO-ALPHA/candles?limit=${raw}`);
+    assert.equal(response.status, 400, `limit=${raw}`);
+    const body = await response.json();
+    assert.equal(body.candles, undefined);
+    assert.match(body.error, /limit/);
+  }
+  assert.equal((await fetch(`${base}/api/stocks/DEMO-NOPE/candles?limit=20`)).status, 404);
+}));
+
 test('scenario endpoint validates data and computes results', async () => withApi(async (base) => {
   const input = { budget: 10000, entryPrice: 100, movePct: -10, holdingDays: 60, borrowedAmount: 4000, annualInterestPct: 14, estimatedFees: 30 };
   const post = (value: unknown) => fetch(`${base}/api/scenarios`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) });
