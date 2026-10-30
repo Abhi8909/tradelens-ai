@@ -59,7 +59,10 @@ docs/DATA_POLICY.md        # Licensing, privacy and financial-product boundaries
 curl http://127.0.0.1:4000/api/health
 curl 'http://127.0.0.1:4000/api/stocks?trend=above-sma&minRsi=40'
 curl http://127.0.0.1:4000/api/stocks/DEMO-ALPHA/candles
+curl 'http://127.0.0.1:4000/api/stocks/DEMO-ALPHA/candles?limit=20'
 curl -X POST http://127.0.0.1:4000/api/scenarios \
   -H 'content-type: application/json' \
   -d '{"budget":100000,"entryPrice":125,"movePct":-10,"holdingDays":60,"borrowedAmount":30000,"annualInterestPct":14,"estimatedFees":100}'
 ```
+
+`GET /api/stocks/:symbol/candles` accepts an optional `limit` (plain integer, 1–90, default 90) and returns the latest `limit` synthetic sessions, oldest first, as `{ source, symbol, requested, count, candles }`. `count` can be lower than `requested` when history is sparse. Any other `limit` value returns `400` with no candle data.
