@@ -140,3 +140,45 @@ curl -X POST http://127.0.0.1:4000/api/portfolio-scenarios \
   - Price moves resolve symbol, then sector, then market.
   - Ending cash = capital + net P&L. `lossExceedsCapital` and per-position `loanShortfall` flag leveraged losses.
 - **Limits:** a limit that can't be checked (for example, risk per position when a stop is missing) is reported as `not-evaluable`, not as passing.
+
+### Backtester
+
+`POST /api/backtests` runs user-defined rules on the active provider's candles for one instrument, then returns the results with the data's provenance. It is a hypothetical historical simulation, not a forecast. The engine is pure and deterministic (`packages/core/src/backtest.ts`).
+
+```bash
+curl -X POST http://127.0.0.1:4000/api/backtests -H 'content-type: application/json' -d '{
+  "symbol": "DEMO-ALPHA",
+  "config": {
+    "initialCapital": 100000,
+    "strategy": { "name": "SMA trend", "entry": [{ "kind": "close-above-sma", "period": 10 }],
+                  "exit": [{ "kind": "close-below-sma", "period": 10 }], "stopLossPct": 5, "takeProfitPct": null, "maxHoldingDays": 20 },
+    "sizing": { "mode": "fraction", "fraction": 1 },
+    "costs": { "perOrder": 20, "buyPct": 0.12, "sellPct": 0.12, "slippageBps": 10 },
+    "periods": { "trainEnd": "2026-08-14", "testEnd": "2026-09-11" }
+  }}'
+```
+
+- **Rules:**
+  - Entry fires when **all** entry conditions hold at a close. An exit fires when **any** exit condition holds, or when an optional stop %, target % or maximum holding days is reached.
+  - Conditions: `close-above-sma`/`close-below-sma` (`period`), `sma-cross-above`/`sma-cross-below` (`fast` < `slow`), `rsi-above`/`rsi-below` (`period`, `level`) and `breakout-high`/`breakdown-low` (`lookback`, the prior N sessions excluding today).
+- **No look-ahead:**
+  - The rule evaluator only ever receives candles up to the decision bar. A signal at day *t*'s close fills at the open of *t+1*.
+  - Stop and target levels are set from the raw entry price. A gap through either level fills at the open; if both are hit inside one bar, the stop is assumed.
+  - A property test checks that appending future candles never changes earlier trades.
+- **Costs:** every fill pays `perOrder + notional × buyPct|sellPct / 100`, and slippage (`slippageBps`) moves every fill against you. All results are net of these. The rates are your own estimates until a statutory cost engine exists.
+- **Sizing:** `fraction` of equity, or `risk` (a % of equity at risk to the stop, which requires `stopLossPct`). Whole shares only, no leverage.
+- **Periods:**
+  - Train is `date ≤ trainEnd`, test is `trainEnd < date ≤ testEnd`, and out-of-sample is everything after that.
+  - Each period is simulated separately from the same starting capital. Indicators may warm up on earlier history, but positions never carry across a boundary: they're closed at the period's last close (`end-of-period`).
+- **Metrics per period:**
+  - Returns and risk: net return, max drawdown, time in market, turnover.
+  - Trades: trade count, win rate with a 95% Wilson interval, average win and loss, payoff ratio, profit factor, expectancy.
+  - Costs: fees, slippage and cost drag.
+  - Benchmark: buy-and-hold of the same instrument with the same costs, plus excess return.
+- **Warnings:** fewer than 30 trades in a period is flagged as too few to judge; indicator warm-up and missing exit rules are flagged too.
+- **Reproducibility:** `runId` is a deterministic hash of the engine version, the configuration and the candles. The same inputs give byte-identical output.
+- **Limits:**
+  - Long-only, one instrument, end-of-day bars.
+  - No corporate-action adjustment.
+  - No survivorship-bias protection: the provider's current instrument list is used.
+  - The demo source has only 90 sessions, so its results are mostly low-sample.

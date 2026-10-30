@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import { MARKET_SYMBOL, buildStockSummary, type DataProvenance, type Instrument, type ProviderKind } from '../../../packages/core/src/marketData.ts';
+import { runBacktest, validateBacktestConfig } from '../../../packages/core/src/backtest.ts';
 import { createDemoProvider } from './providers/demo.ts';
 import { ProviderError, type CandleResult, type MarketDataProvider } from './providers/types.ts';
 import { simulatePosition } from '../../../packages/core/src/scenario.ts';
@@ -118,6 +119,28 @@ export function createApp(provider: MarketDataProvider = createDemoProvider()) {
           return send(response, 200, { source: 'hypothetical-user-input', result });
         } catch (error) {
           return send(response, 400, { error: error instanceof Error ? error.message : 'Invalid input' });
+        }
+      }
+      if (request.method === 'POST' && path === '/api/backtests') {
+        if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
+        let input: unknown;
+        try { input = await jsonBody(request); } catch { return send(response, 400, { error: 'Invalid or oversized JSON body' }); }
+        if (!input || typeof input !== 'object' || Array.isArray(input)) return send(response, 400, { error: 'Expected { symbol, config }' });
+        const { symbol, config } = input as Record<string, unknown>;
+        if (typeof symbol !== 'string' || !MARKET_SYMBOL.test(symbol)) return send(response, 400, { error: 'Invalid backtest', details: ['symbol must be an instrument symbol'] });
+        const validated = validateBacktestConfig(config);
+        if (!validated.ok) return send(response, 400, { error: 'Invalid backtest', details: validated.errors });
+        let candles: CandleResult;
+        try { candles = await provider.getCandles(symbol); } catch (error) {
+          if (error instanceof ProviderError && error.code === 'not-found') return send(response, 404, { error: provider.info.kind === 'demo' ? 'Unknown demo symbol' : 'Unknown symbol' });
+          return providerFailure(response, error);
+        }
+        try {
+          const result = runBacktest(validated.value, candles.candles);
+          return send(response, 200, { source, symbol, provenance: candles.provenance, result });
+        } catch (error) {
+          if (error instanceof RangeError) return send(response, 400, { error: 'Invalid backtest', details: [error.message] });
+          throw error;
         }
       }
       if (request.method === 'POST' && path === '/api/portfolio-scenarios') {
