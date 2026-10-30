@@ -6,11 +6,14 @@ import {
 } from 'lucide-react';
 import type { PositionScenarioInput, PositionScenarioResult, StockSummary } from '../../../packages/core/src/types.ts';
 import CandleChart from './CandleChart.tsx';
+import { DataBanner, ProvenanceLine } from './DataSource.tsx';
+import type { DataProvenance, ProviderInfo } from '../../../packages/core/src/marketData.ts';
 import ThesisJournal from './ThesisJournal.tsx';
 import PortfolioRisk from './PortfolioRisk.tsx';
 
 type Tab = 'overview' | 'screener' | 'simulator' | 'portfolio' | 'journal' | 'roadmap';
-type StocksPayload = { data: StockSummary[]; count: number; source: string };
+type StockRow = StockSummary & { provenance?: DataProvenance };
+type StocksPayload = { data: StockRow[]; count: number; source: string };
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 const pct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const nav: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
@@ -42,12 +45,12 @@ function Metric({ label, value, sub, icon }: { label: string; value: string; sub
 }
 
 function StockTable({ stocks, selected, onSelect, watchlist, onWatch }: {
-  stocks: StockSummary[]; selected: string; onSelect: (s: string) => void; watchlist: string[]; onWatch: (s: string) => void;
+  stocks: StockRow[]; selected: string; onSelect: (s: string) => void; watchlist: string[]; onWatch: (s: string) => void;
 }) {
   return <div className="table-scroll"><table className="stock-table">
     <thead><tr><th>Company</th><th>Last price</th><th>Change</th><th>RSI (14)</th><th>Trend</th><th>20-day chart</th><th aria-label="Watchlist">Save</th></tr></thead>
     <tbody>{stocks.map(s => <tr key={s.symbol} className={selected === s.symbol ? 'selected' : ''}>
-      <td><button className="stock-link" onClick={() => onSelect(s.symbol)}><span className="avatar">{s.symbol.split('-')[1].slice(0, 1)}</span><span><strong>{s.symbol}</strong><small>{s.name}</small></span></button></td>
+      <td><button className="stock-link" onClick={() => onSelect(s.symbol)}><span className="avatar">{(s.symbol.split('-')[1] || s.symbol).slice(0, 1)}</span><span><strong>{s.symbol}{s.provenance?.freshness === 'stale' && <em className="stale-tag">Stale</em>}</strong><small>{s.name}</small></span></button></td>
       <td className="num">{rupees.format(s.lastClose)}</td>
       <td className={`num ${s.changePct >= 0 ? 'up' : 'down'}`}>{s.changePct >= 0 ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>} {pct(s.changePct)}</td>
       <td><span className="rsi">{s.rsi14?.toFixed(1) ?? '–'}</span></td>
@@ -55,17 +58,18 @@ function StockTable({ stocks, selected, onSelect, watchlist, onWatch }: {
       <td className="chart-cell"><Sparkline values={s.sparkline} positive={s.changePct >= 0}/></td>
       <td><button aria-label={watchlist.includes(s.symbol) ? `Remove ${s.symbol} from watchlist` : `Add ${s.symbol} to watchlist`} title="Save watchlist locally" className={`star-btn ${watchlist.includes(s.symbol) ? 'saved' : ''}`} onClick={() => onWatch(s.symbol)}><Star size={18} fill={watchlist.includes(s.symbol) ? 'currentColor' : 'none'}/></button></td>
     </tr>)}</tbody>
-  </table>{stocks.length === 0 && <p className="empty">No demo stocks match your filters. Adjust your search or RSI range.</p>}</div>;
+  </table>{stocks.length === 0 && <p className="empty">No instruments match your filters. Adjust your search or RSI range.</p>}</div>;
 }
 
-function StockDetail({ stock }: { stock: StockSummary | undefined }) {
-  if (!stock) return <div className="panel detail"><p className="muted">Choose a demo stock.</p></div>;
+function StockDetail({ stock }: { stock: StockRow | undefined }) {
+  if (!stock) return <div className="panel detail"><p className="muted">Choose an instrument.</p></div>;
   return <div className="panel detail">
     <div className="section-head"><div><p className="eyebrow">RESEARCH SNAPSHOT</p><h3>{stock.symbol}</h3><p className="muted">{stock.name} · {stock.sector}</p></div><span className="tag">Rules-based</span></div>
-    <div className="detail-price"><div><span className="big-price">{rupees.format(stock.lastClose)}</span><div className={`change ${stock.changePct >= 0 ? 'up' : 'down'}`}>{pct(stock.changePct)} vs previous demo close</div></div></div>
+    <div className="detail-price"><div><span className="big-price">{rupees.format(stock.lastClose)}</span><div className={`change ${stock.changePct >= 0 ? 'up' : 'down'}`}>{pct(stock.changePct)} vs previous {stock.provenance?.kind === 'licensed' ? '' : `${stock.provenance?.kind === 'fixture' ? 'fixture' : 'demo'} `}close</div></div></div>
+    <ProvenanceLine provenance={stock.provenance}/>
     <CandleChart symbol={stock.symbol}/>
     <div className="detail-kpis"><div><span>20-day SMA</span><strong>{stock.sma20 ? rupees.format(stock.sma20) : 'N/A'}</strong></div><div><span>RSI (14)</span><strong>{stock.rsi14?.toFixed(1) ?? 'N/A'}</strong></div></div>
-    <div className="insight"><div className="insight-title"><Activity size={16}/> Deterministic insight</div><p>The demo closing price is <strong>{stock.trend === 'above-sma' ? 'above' : 'below'}</strong> its 20-day simple moving average. RSI is {stock.rsi14?.toFixed(1) ?? 'unavailable'}. This describes synthetic historical data only; it is not a buy/sell recommendation.</p></div>
+    <div className="insight"><div className="insight-title"><Activity size={16}/> Deterministic insight</div><p>The {stock.provenance?.kind === 'licensed' ? 'latest' : stock.provenance?.kind === 'fixture' ? 'fixture' : 'demo'} closing price is <strong>{stock.trend === 'above-sma' ? 'above' : 'below'}</strong> its 20-day simple moving average. RSI is {stock.rsi14?.toFixed(1) ?? 'unavailable'}. This describes {stock.provenance?.kind === 'licensed' ? 'historical provider data as of the date shown' : 'synthetic data'} only; it is not a buy/sell recommendation.</p></div>
     <div className="coming"><Sparkles size={16}/><div><strong>AI research assistant — planned</strong><p>Grounded analysis, financial filings, source citations, and opposing arguments will be built in a later milestone.</p></div></div>
   </div>;
 }
@@ -124,7 +128,8 @@ function Roadmap() {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('overview');
-  const [stocks, setStocks] = useState<StockSummary[]>([]);
+  const [stocks, setStocks] = useState<StockRow[]>([]);
+  const [provider, setProvider] = useState<ProviderInfo | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState('DEMO-ALPHA');
   const [search, setSearch] = useState('');
   const [trend, setTrend] = useState('all');
@@ -137,10 +142,18 @@ export default function App() {
   });
   useEffect(() => {
     const controller = new AbortController();
+    fetch('/api/health', { signal: controller.signal }).then(res => res.ok ? res.json() : null)
+      .then(body => { if (body?.provider) setProvider(body.provider as ProviderInfo); }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
     fetch('/api/stocks', { signal: controller.signal }).then(async res => { if (!res.ok) throw new Error('API unavailable'); return await res.json() as StocksPayload; })
       .then(body => setStocks(body.data)).catch(err => { if (!controller.signal.aborted) setLoadError(err instanceof Error ? err.message : 'Failed to load stocks'); });
     return () => controller.abort();
   }, []);
+  const dataWord = provider?.kind === 'licensed' ? provider.exchange : provider?.kind === 'fixture' ? 'fixture' : 'demo';
+  const modeLabel = provider === null ? 'CHECKING SOURCE' : provider.kind === 'licensed' ? 'LICENSED DATA' : provider.kind === 'fixture' ? 'FIXTURE MODE' : 'DEMO MODE';
   const selected = stocks.find(s => s.symbol === selectedSymbol) ?? stocks[0];
   const filtered = useMemo(() => stocks.filter(s => {
     const q = search.toLowerCase();
@@ -162,12 +175,12 @@ export default function App() {
       <nav aria-label="Main navigation">{nav.map(item => <button className={`nav-item ${tab === item.id ? 'active' : ''}`} key={item.id} onClick={() => setTab(item.id)}><item.icon size={18}/>{item.label}{tab === item.id && <ChevronRight size={15} className="nav-chevron"/>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-info"><ShieldCheck size={19}/><div><strong>Paper research mode</strong><small>No real orders or live data</small></div></div><a href="https://github.com" target="_blank" rel="noreferrer"><Github size={16}/> GitHub <ArrowRight size={14}/></a></div>
     </aside>
-    <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> DEMO MODE</span><span className="avatar-user">TL</span></div></div>
-      <div className="content"><div className="demo-banner"><AlertTriangle size={18}/><span><strong>Synthetic market data.</strong> All tickers, prices and returns are fictional and generated for testing. Nothing here is live NSE data or investment advice.</span></div>
-        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'journal' ? 'Thesis journal' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? 'Explore demo price data and rule-based research signals.' : tab === 'screener' ? 'Filter synthetic companies by moving-average trend and RSI.' : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
+    <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> {modeLabel}</span><span className="avatar-user">TL</span></div></div>
+      <div className="content"><DataBanner provider={provider}/>
+        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'journal' ? 'Thesis journal' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? `Explore ${dataWord} price data and rule-based research signals.` : tab === 'screener' ? `Filter ${provider?.kind === 'licensed' ? 'instruments' : 'synthetic instruments'} by moving-average trend and RSI.` : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
         {loadError && <div role="alert" className="error-panel">Cannot load the API: {loadError}. Run <code>npm run dev:api</code> in another terminal or <code>npm run dev</code> from the repository root.</div>}
         {tab === 'overview' && <>
-          <div className="metrics"><Metric label="Demo instruments" value={String(stocks.length).padStart(2, '0')} sub="Fictional companies" icon={<BarChart3 size={20}/>}/><Metric label="Positive daily change" value={String(rising).padStart(2, '0')} sub="Of synthetic instruments" icon={<ArrowUpRight size={20}/>}/><Metric label="Above 20-day SMA" value={String(bullish).padStart(2, '0')} sub="Rules-based signal" icon={<Activity size={20}/>}/><Metric label="Average demo change" value={pct(avgMove)} sub="Not a real market index" icon={<LineChart size={20}/>}/></div>
+          <div className="metrics"><Metric label={provider?.kind === 'licensed' ? 'Instruments' : provider?.kind === 'fixture' ? 'Fixture instruments' : 'Demo instruments'} value={String(stocks.length).padStart(2, '0')} sub={provider?.kind === 'licensed' ? `${provider.exchange} · ${provider.name}` : 'Fictional companies'} icon={<BarChart3 size={20}/>}/><Metric label="Positive daily change" value={String(rising).padStart(2, '0')} sub={provider?.kind === 'licensed' ? 'Of listed instruments' : 'Of synthetic instruments'} icon={<ArrowUpRight size={20}/>}/><Metric label="Above 20-day SMA" value={String(bullish).padStart(2, '0')} sub="Rules-based signal" icon={<Activity size={20}/>}/><Metric label={`Average ${provider?.kind === 'licensed' ? '' : `${dataWord} `}change`} value={pct(avgMove)} sub={provider?.kind === 'licensed' ? 'Equal-weight; not an index' : 'Not a real market index'} icon={<LineChart size={20}/>}/></div>
           <div className="two-col"><div className="panel overview-table"><div className="section-head"><div><p className="eyebrow">STOCK UNIVERSE</p><h3>Explore instruments</h3></div><button className="text-btn" onClick={() => setTab('screener')}>Open screener <ArrowRight size={15}/></button></div><StockTable stocks={stocks} selected={selectedSymbol} onSelect={setSelectedSymbol} watchlist={watchlist} onWatch={toggleWatch}/></div><StockDetail stock={selected}/></div>
         </>}
         {tab === 'screener' && <div className="panel screen"><div className="section-head"><div><p className="eyebrow">SCREENING CONDITIONS</p><h3>Filter the universe</h3></div><span className="tag">{filtered.length} results</span></div><div className="filters"><label className="search-field"><Search size={18}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search a demo company" aria-label="Search demo stocks"/></label><label><span>20-day trend</span><select value={trend} onChange={e => setTrend(e.target.value)}><option value="all">All</option><option value="above-sma">Above SMA</option><option value="below-sma">Below SMA</option></select></label><label><span>Min RSI</span><input type="number" min="0" max="100" value={minRsi} onChange={e => setMinRsi(e.target.value)}/></label><label><span>Max RSI</span><input type="number" min="0" max="100" value={maxRsi} onChange={e => setMaxRsi(e.target.value)}/></label></div><StockTable stocks={filtered} selected={selectedSymbol} onSelect={selectStock} watchlist={watchlist} onWatch={toggleWatch}/></div>}

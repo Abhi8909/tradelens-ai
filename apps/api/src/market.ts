@@ -1,4 +1,4 @@
-import { percentChange, rsi, sma } from '../../../packages/core/src/indicators.ts';
+import { buildStockSummary } from '../../../packages/core/src/marketData.ts';
 import type { Candle, Company, StockSummary } from '../../../packages/core/src/types.ts';
 
 /** Every ticker and price in this module is fictional and generated locally. */
@@ -47,16 +47,6 @@ export function getStock(symbol: string): StockSummary | undefined {
   const company = COMPANIES.find((item) => item.symbol === symbol);
   const candles = getCandles(symbol);
   if (!company || !candles) return undefined;
-  const closes = candles.map((item) => item.close);
-  const lastClose = closes[closes.length - 1];
-  const previousClose = closes[closes.length - 2];
-  const sma20 = sma(closes, 20);
-  return {
-    ...company, lastClose, previousClose,
-    changePct: percentChange(previousClose, lastClose),
-    sma20, rsi14: rsi(closes, 14),
-    trend: sma20 === null ? 'insufficient-data' : lastClose >= sma20 ? 'above-sma' : 'below-sma',
-    sparkline: closes.slice(-20)
-  };
+  return buildStockSummary(company, candles) ?? undefined;
 }
 export function listStocks(): StockSummary[] { return COMPANIES.map((c) => getStock(c.symbol)!); }
