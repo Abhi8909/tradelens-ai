@@ -12,9 +12,9 @@ import ThesisJournal from './ThesisJournal.tsx';
 import PortfolioRisk from './PortfolioRisk.tsx';
 import BacktestLab from './BacktestLab.tsx';
 import ResearchAssistant from './ResearchAssistant.tsx';
-import MtfImport from './MtfImport.tsx';
+import MtfTracker from './MtfTracker.tsx';
 
-type Tab = 'overview' | 'screener' | 'simulator' | 'portfolio' | 'backtest' | 'journal' | 'research' | 'mtf-import' | 'roadmap';
+type Tab = 'overview' | 'screener' | 'simulator' | 'portfolio' | 'backtest' | 'journal' | 'research' | 'mtf' | 'roadmap';
 type StockRow = StockSummary & { provenance?: DataProvenance };
 type StocksPayload = { data: StockRow[]; count: number; source: string };
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
@@ -27,7 +27,7 @@ const nav: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'backtest', label: 'Backtest', icon: History },
   { id: 'journal', label: 'Thesis journal', icon: NotebookPen },
   { id: 'research', label: 'Research assistant', icon: Sparkles },
-  { id: 'mtf-import', label: 'MTF Import', icon: Wallet },
+  { id: 'mtf', label: 'MTF Tracker', icon: Wallet },
   { id: 'roadmap', label: 'Build roadmap', icon: BookOpen }
 ];
 
@@ -179,11 +179,11 @@ export default function App() {
     <aside className="sidebar"><div className="brand"><div className="brand-mark"><LineChart size={23}/></div><div><strong>TradeLens <span>AI</span></strong><small>Research workspace</small></div></div>
       <div className="sidebar-heading">WORKSPACE</div>
       <nav aria-label="Main navigation">{nav.map(item => <button className={`nav-item ${tab === item.id ? 'active' : ''}`} key={item.id} onClick={() => setTab(item.id)}><item.icon size={18}/>{item.label}{tab === item.id && <ChevronRight size={15} className="nav-chevron"/>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-info"><ShieldCheck size={19}/><div><strong>Paper research mode</strong><small>No real orders or live data</small></div></div><a href="https://github.com" target="_blank" rel="noreferrer"><Github size={16}/> GitHub <ArrowRight size={14}/></a></div>
+      <div className="sidebar-bottom"><div className="sidebar-info"><ShieldCheck size={19}/><div><strong>{tab === 'mtf' ? 'Manual position tracking' : 'Paper research mode'}</strong><small>{tab === 'mtf' ? 'No broker order execution' : 'No real orders or live data'}</small></div></div><a href="https://github.com" target="_blank" rel="noreferrer"><Github size={16}/> GitHub <ArrowRight size={14}/></a></div>
     </aside>
-    <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> {modeLabel}</span><span className="avatar-user">TL</span></div></div>
-      <div className="content"><DataBanner provider={provider}/>
-        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'backtest' ? 'Backtest' : tab === 'journal' ? 'Thesis journal' : tab === 'research' ? 'Research assistant' : tab === 'mtf-import' ? 'MTF Import' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? `Explore ${dataWord} price data and rule-based research signals.` : tab === 'screener' ? `Filter ${provider?.kind === 'licensed' ? 'instruments' : 'synthetic instruments'} by moving-average trend and RSI.` : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'backtest' ? 'Test your own rules on past data, net of costs, with separate train, test and out-of-sample periods.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : tab === 'mtf-import' ? 'Preview and correct private spreadsheet evidence locally.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
+    <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> {tab === 'mtf' ? 'BROWSER LOCAL' : modeLabel}</span><span className="avatar-user">TL</span></div></div>
+      <div className="content">{tab !== 'mtf' && <DataBanner provider={provider}/>}
+        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'backtest' ? 'Backtest' : tab === 'journal' ? 'Thesis journal' : tab === 'research' ? 'Research assistant' : tab === 'mtf' ? 'MTF Tracker' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? `Explore ${dataWord} price data and rule-based research signals.` : tab === 'screener' ? `Filter ${provider?.kind === 'licensed' ? 'instruments' : 'synthetic instruments'} by moving-average trend and RSI.` : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'backtest' ? 'Test your own rules on past data, net of costs, with separate train, test and out-of-sample periods.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : tab === 'mtf' ? 'Add positions, track daily charges and see your cost-adjusted P/L.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
         {loadError && <div role="alert" className="error-panel">Cannot load the API: {loadError}. Run <code>npm run dev:api</code> in another terminal or <code>npm run dev</code> from the repository root.</div>}
         {tab === 'overview' && <>
           <div className="metrics"><Metric label={provider?.kind === 'licensed' ? 'Instruments' : provider?.kind === 'fixture' ? 'Fixture instruments' : 'Demo instruments'} value={String(stocks.length).padStart(2, '0')} sub={provider?.kind === 'licensed' ? `${provider.exchange} · ${provider.name}` : 'Fictional companies'} icon={<BarChart3 size={20}/>}/><Metric label="Positive daily change" value={String(rising).padStart(2, '0')} sub={provider?.kind === 'licensed' ? 'Of listed instruments' : 'Of synthetic instruments'} icon={<ArrowUpRight size={20}/>}/><Metric label="Above 20-day SMA" value={String(bullish).padStart(2, '0')} sub="Rules-based signal" icon={<Activity size={20}/>}/><Metric label={`Average ${provider?.kind === 'licensed' ? '' : `${dataWord} `}change`} value={pct(avgMove)} sub={provider?.kind === 'licensed' ? 'Equal-weight; not an index' : 'Not a real market index'} icon={<LineChart size={20}/>}/></div>
@@ -195,9 +195,9 @@ export default function App() {
         {tab === 'backtest' && <BacktestLab stocks={stocks}/>}
         {tab === 'journal' && <ThesisJournal stocks={stocks} defaultSymbol={selected?.symbol ?? 'DEMO-ALPHA'}/>}
         {tab === 'research' && <ResearchAssistant stocks={stocks}/>}
-        <div hidden={tab !== 'mtf-import'}><MtfImport/></div>
+        <div hidden={tab !== 'mtf'}><MtfTracker active={tab === 'mtf'}/></div>
         {tab === 'roadmap' && <Roadmap/>}
-        <div className="footer"><span><CheckCircle2 size={15}/> Read-only demo · no broker connection</span><span><Wallet size={15}/> No personal financial data collected</span></div>
+        <div className="footer"><span><CheckCircle2 size={15}/> {tab === 'mtf' ? 'Manual tracking · no order execution' : 'Read-only demo · no broker connection'}</span><span><Wallet size={15}/> {tab === 'mtf' ? 'Positions saved only in this browser' : 'No personal financial data collected'}</span></div>
       </div>
     </main>
   </div>;

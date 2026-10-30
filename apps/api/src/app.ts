@@ -11,6 +11,7 @@ import {
 } from '../../../packages/core/src/portfolio.ts';
 import type { PortfolioScenario, PositionScenarioInput, StockSummary } from '../../../packages/core/src/types.ts';
 import { mockResearchProvider, runResearch, validateResearchInput, type ResearchProvider } from './research.ts';
+import { validateMtfQuotes, type MtfQuoteFeed } from './mtfQuotes.ts';
 import { createGuard, type ApiOptions } from './security.ts';
 
 const SOURCES: Record<ProviderKind, string> = { demo: 'synthetic-demo', fixture: 'synthetic-fixture', licensed: 'licensed-provider' };
@@ -48,7 +49,7 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider } = {}) {
+export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed } = {}) {
   const source = SOURCES[provider.info.kind];
   const guard = createGuard(options);
   return createServer(async (request, response) => {
@@ -56,6 +57,18 @@ export function createApp(provider: MarketDataProvider = createDemoProvider(), o
       if (!guard(request, response)) return;
       const url = new URL(request.url ?? '/', 'http://localhost');
       const path = url.pathname;
+      if (request.method === 'POST' && path === '/api/mtf/quotes') {
+        if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
+        let raw: unknown;
+        try { raw = await jsonBody(request, 4096); } catch { return send(response, 400, { error: 'Invalid quote request' }); }
+        const symbols = raw && typeof raw === 'object' ? (raw as { symbols?: unknown }).symbols : null;
+        if (!Array.isArray(symbols) || !symbols.length || symbols.length > 50 || new Set(symbols).size !== symbols.length || symbols.some(s => typeof s !== 'string' || !MARKET_SYMBOL.test(s))) return send(response, 400, { error: 'Expected 1–50 unique scrip symbols' });
+        if (!options.mtfQuoteFeed) return send(response, 503, { error: 'Automatic prices need a configured licensed NSE quote feed. You can enter current prices manually.', code: 'QUOTE_FEED_NOT_CONFIGURED' });
+        try {
+          const quotes = validateMtfQuotes(await options.mtfQuoteFeed.getQuotes(symbols), symbols, Date.now());
+          return send(response, 200, { quotes, unavailable: symbols.filter(s => !quotes.some(q => q.symbol === s)), fetchedAt: new Date().toISOString() });
+        } catch { return send(response, 502, { error: 'Price feed unavailable. Previous prices may be stale.' }); }
+      }
       if (request.method === 'POST' && path === '/api/research') {
         if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
         let raw: unknown;
