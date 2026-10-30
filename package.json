@@ -1,0 +1,21 @@
+{
+  "name": "tradelens-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22.16.0" },
+  "workspaces": ["apps/web"],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node --experimental-strip-types --watch apps/api/src/server.ts",
+    "dev:web": "npm run dev --workspace @tradelens/web",
+    "start:api": "node --experimental-strip-types apps/api/src/server.ts",
+    "test": "node --experimental-strip-types --test packages/core/tests/*.test.ts apps/api/tests/*.test.ts",
+    "build": "npm run build --workspace @tradelens/web",
+    "typecheck": "npm run typecheck --workspace @tradelens/web && tsc -p apps/api/tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.0"
+  }
+}
