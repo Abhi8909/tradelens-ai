@@ -10,6 +10,8 @@ import {
   PORTFOLIO_LIMITS, analyzePortfolio, compareScenarios, evaluateRiskLimits, validatePortfolio, validateRiskLimits, validateScenario
 } from '../../../packages/core/src/portfolio.ts';
 import type { PortfolioScenario, PositionScenarioInput, StockSummary } from '../../../packages/core/src/types.ts';
+import { mockResearchProvider, runResearch, validateResearchInput, type ResearchProvider } from './research.ts';
+import { createGuard, type ApiOptions } from './security.ts';
 
 const SOURCES: Record<ProviderKind, string> = { demo: 'synthetic-demo', fixture: 'synthetic-fixture', licensed: 'licensed-provider' };
 const WARNINGS: Record<ProviderKind, string> = {
@@ -46,12 +48,23 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp(provider: MarketDataProvider = createDemoProvider()) {
+export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider } = {}) {
   const source = SOURCES[provider.info.kind];
+  const guard = createGuard(options);
   return createServer(async (request, response) => {
-    const url = new URL(request.url ?? '/', 'http://localhost');
-    const path = url.pathname;
     try {
+      if (!guard(request, response)) return;
+      const url = new URL(request.url ?? '/', 'http://localhost');
+      const path = url.pathname;
+      if (request.method === 'POST' && path === '/api/research') {
+        if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
+        let raw: unknown;
+        try { raw = await jsonBody(request); } catch { return send(response, 400, { error: 'Invalid or oversized JSON body' }); }
+        const input = validateResearchInput(raw);
+        if (!input) return send(response, 400, { error: 'Expected symbol, thesis (1–2000 characters), direction (rising/falling), action (review/argue-against)' });
+        try { return send(response, 200, await runResearch(provider, options.research ?? mockResearchProvider, input)); }
+        catch { return send(response, 502, { error: 'Research tools or provider unavailable; no claims generated' }); }
+      }
       if (request.method === 'GET' && path === '/api/health') {
         return send(response, 200, { status: 'ok', source, warning: WARNINGS[provider.info.kind], provider: provider.info });
       }

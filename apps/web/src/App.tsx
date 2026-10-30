@@ -11,8 +11,9 @@ import type { DataProvenance, ProviderInfo } from '../../../packages/core/src/ma
 import ThesisJournal from './ThesisJournal.tsx';
 import PortfolioRisk from './PortfolioRisk.tsx';
 import BacktestLab from './BacktestLab.tsx';
+import ResearchAssistant from './ResearchAssistant.tsx';
 
-type Tab = 'overview' | 'screener' | 'simulator' | 'portfolio' | 'backtest' | 'journal' | 'roadmap';
+type Tab = 'overview' | 'screener' | 'simulator' | 'portfolio' | 'backtest' | 'journal' | 'research' | 'roadmap';
 type StockRow = StockSummary & { provenance?: DataProvenance };
 type StocksPayload = { data: StockRow[]; count: number; source: string };
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
@@ -24,6 +25,7 @@ const nav: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'portfolio', label: 'Portfolio risk', icon: PieChart },
   { id: 'backtest', label: 'Backtest', icon: History },
   { id: 'journal', label: 'Thesis journal', icon: NotebookPen },
+  { id: 'research', label: 'Research assistant', icon: Sparkles },
   { id: 'roadmap', label: 'Build roadmap', icon: BookOpen }
 ];
 
@@ -72,7 +74,7 @@ function StockDetail({ stock }: { stock: StockRow | undefined }) {
     <CandleChart symbol={stock.symbol}/>
     <div className="detail-kpis"><div><span>20-day SMA</span><strong>{stock.sma20 ? rupees.format(stock.sma20) : 'N/A'}</strong></div><div><span>RSI (14)</span><strong>{stock.rsi14?.toFixed(1) ?? 'N/A'}</strong></div></div>
     <div className="insight"><div className="insight-title"><Activity size={16}/> Deterministic insight</div><p>The {stock.provenance?.kind === 'licensed' ? 'latest' : stock.provenance?.kind === 'fixture' ? 'fixture' : 'demo'} closing price is <strong>{stock.trend === 'above-sma' ? 'above' : 'below'}</strong> its 20-day simple moving average. RSI is {stock.rsi14?.toFixed(1) ?? 'unavailable'}. This describes {stock.provenance?.kind === 'licensed' ? 'historical provider data as of the date shown' : 'synthetic data'} only; it is not a buy/sell recommendation.</p></div>
-    <div className="coming"><Sparkles size={16}/><div><strong>AI research assistant — planned</strong><p>Grounded analysis, financial filings, source citations, and opposing arguments will be built in a later milestone.</p></div></div>
+    <div className="coming"><Sparkles size={16}/><div><strong>Grounded research assistant</strong><p>Open Research assistant to review versioned price evidence and contrary observations. Offline mock by default; filings and news are not available.</p></div></div>
   </div>;
 }
 
@@ -179,7 +181,7 @@ export default function App() {
     </aside>
     <main className="main"><div className="topbar"><div><span className="breadcrumb">TradeLens AI</span><span className="crumb-arrow">/</span><strong>{nav.find(n => n.id === tab)?.label}</strong></div><div className="topbar-right"><span className="pill"><span className="dot"/> {modeLabel}</span><span className="avatar-user">TL</span></div></div>
       <div className="content"><DataBanner provider={provider}/>
-        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'backtest' ? 'Backtest' : tab === 'journal' ? 'Thesis journal' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? `Explore ${dataWord} price data and rule-based research signals.` : tab === 'screener' ? `Filter ${provider?.kind === 'licensed' ? 'instruments' : 'synthetic instruments'} by moving-average trend and RSI.` : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'backtest' ? 'Test your own rules on past data, net of costs, with separate train, test and out-of-sample periods.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
+        <div className="page-heading"><div><p className="eyebrow">BUILD SMARTER RESEARCH</p><h1>{tab === 'overview' ? 'Market overview' : tab === 'screener' ? 'Stock screener' : tab === 'simulator' ? 'Scenario lab' : tab === 'portfolio' ? 'Portfolio risk' : tab === 'backtest' ? 'Backtest' : tab === 'journal' ? 'Thesis journal' : tab === 'research' ? 'Research assistant' : 'Product roadmap'}</h1><p className="muted">{tab === 'overview' ? `Explore ${dataWord} price data and rule-based research signals.` : tab === 'screener' ? `Filter ${provider?.kind === 'licensed' ? 'instruments' : 'synthetic instruments'} by moving-average trend and RSI.` : tab === 'simulator' ? 'Understand potential costs and outcomes before committing capital.' : tab === 'portfolio' ? 'Check concentration, leverage and your own risk limits across hypothetical positions and scenarios.' : tab === 'backtest' ? 'Test your own rules on past data, net of costs, with separate train, test and out-of-sample periods.' : tab === 'journal' ? 'Record a hypothesis with evidence for and against it, and keep every revision.' : 'A transparent plan for turning this starter into a real product.'}</p></div><span className="header-stamp"><Bell size={17}/> Research prototype · v0.1</span></div>
         {loadError && <div role="alert" className="error-panel">Cannot load the API: {loadError}. Run <code>npm run dev:api</code> in another terminal or <code>npm run dev</code> from the repository root.</div>}
         {tab === 'overview' && <>
           <div className="metrics"><Metric label={provider?.kind === 'licensed' ? 'Instruments' : provider?.kind === 'fixture' ? 'Fixture instruments' : 'Demo instruments'} value={String(stocks.length).padStart(2, '0')} sub={provider?.kind === 'licensed' ? `${provider.exchange} · ${provider.name}` : 'Fictional companies'} icon={<BarChart3 size={20}/>}/><Metric label="Positive daily change" value={String(rising).padStart(2, '0')} sub={provider?.kind === 'licensed' ? 'Of listed instruments' : 'Of synthetic instruments'} icon={<ArrowUpRight size={20}/>}/><Metric label="Above 20-day SMA" value={String(bullish).padStart(2, '0')} sub="Rules-based signal" icon={<Activity size={20}/>}/><Metric label={`Average ${provider?.kind === 'licensed' ? '' : `${dataWord} `}change`} value={pct(avgMove)} sub={provider?.kind === 'licensed' ? 'Equal-weight; not an index' : 'Not a real market index'} icon={<LineChart size={20}/>}/></div>
@@ -190,6 +192,7 @@ export default function App() {
         {tab === 'portfolio' && <PortfolioRisk stocks={stocks}/>}
         {tab === 'backtest' && <BacktestLab stocks={stocks}/>}
         {tab === 'journal' && <ThesisJournal stocks={stocks} defaultSymbol={selected?.symbol ?? 'DEMO-ALPHA'}/>}
+        {tab === 'research' && <ResearchAssistant stocks={stocks}/>}
         {tab === 'roadmap' && <Roadmap/>}
         <div className="footer"><span><CheckCircle2 size={15}/> Read-only demo · no broker connection</span><span><Wallet size={15}/> No personal financial data collected</span></div>
       </div>
