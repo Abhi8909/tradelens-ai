@@ -14,7 +14,8 @@ export const MTF_IMPORT_FIELDS: MtfImportField[] = ['symbol', 'buyDate', ...nume
 const missing = (v: string) => !v.trim() || v.trim().toUpperCase() === '#N/A';
 function decimalText(raw: string, field: MtfImportField): string | null {
   if (missing(raw)) return null;
-  const text = raw.trim().replace(/^₹\s*/, '').replace(field === 'percent' ? /%$/ : /$^/, '');
+  const base = raw.trim().replace(/^₹\s*/, '');
+  const text = field === 'percent' ? base.replace(/%$/, '') : base;
   // Accept plain, western or Indian grouping; do not repair malformed commas.
   if (!/^-?(?:\d+|\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})*,\d{3})(?:\.\d{1,8})?$/.test(text)) return null;
   const value = new D(text.replaceAll(',', ''));
