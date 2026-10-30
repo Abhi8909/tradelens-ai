@@ -182,3 +182,20 @@ curl -X POST http://127.0.0.1:4000/api/backtests -H 'content-type: application/j
   - No corporate-action adjustment.
   - No survivorship-bias protection: the provider's current instrument list is used.
   - The demo source has only 90 sessions, so its results are mostly low-sample.
+
+## Grounded research and deployment (T6 / T7)
+
+Open **Research assistant** to review a directional thesis or request contrary
+evidence. The offline mock selects typed SMA20/RSI14 evidence; citations retain
+source provenance, observation time and SHA-256 input versions. Optional HTTP
+model adapters can select verified evidence IDs only; generated claims are never
+rendered. No filings or news are retrieved in this release.
+
+Production adds a required workspace bearer gate, request/concurrency limits,
+sanitized request telemetry, graceful shutdown, CI dependency/CodeQL scans and
+browser E2E coverage. User data remains browser-local; accounts, tenancy and a
+database remain conditional on introducing server persistence.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for secrets, gateway configuration, provider
+contracts, monitoring, backup/rollback and limitations.
+
+Run browser tests with `npx playwright install chromium` then `npm run test:e2e`.
