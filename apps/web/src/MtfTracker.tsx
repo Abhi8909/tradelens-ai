@@ -27,7 +27,7 @@ export default function MtfTracker({ active }: { active: boolean }) {
   const [form, setForm] = useState(emptyForm); const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState(''); const [prices, setPrices] = useState<Record<string, MtfPrice>>({});
   const [priceError, setPriceError] = useState(''); const [refreshing, setRefreshing] = useState(false); const [refreshKey, setRefreshKey] = useState(0);
-  const [lastRefresh, setLastRefresh] = useState<string | null>(null); const [exitDates, setExitDates] = useState<Record<string, string>>({});
+  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const symbols = JSON.stringify([...new Set(positions.filter(p => !p.exitDate).map(p => p.symbol))].sort());
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
@@ -85,10 +85,6 @@ export default function MtfTracker({ active }: { active: boolean }) {
       save(editing ? positions.map(p => p.id === editing ? position : p) : [...positions, position]); setForm(emptyForm); setEditing(null);
     } catch (e) { setError(`Could not save: ${readableError(e)}`); }
   }
-  function close(position: ManualMtfPosition) {
-    try { const next = { ...position, exitDate: exitDates[position.id] || today }; validateManualMtfPosition(next, today); save(positions.map(p => p.id === position.id ? next : p)); setError(''); }
-    catch (e) { setError(readableError(e)); }
-  }
   const rows = positions.map(position => {
     const quote = prices[position.symbol]; const age = quote ? now.getTime() - Date.parse(quote.marketAt) : Infinity;
     const fresh = quote && age >= 0 && age <= (quote.mode === 'EOD' ? 86_400_000 : 300_000);
@@ -121,11 +117,11 @@ export default function MtfTracker({ active }: { active: boolean }) {
     </section>
     {error && <p role="alert" className="error-panel">{error}</p>}
     <section className="panel mtf-positions"><div className="section-head"><h3>Positions</h3><span className="tag">Open + exited history</span></div>
-      {!positions.length ? <div className="mtf-empty"><Wallet size={32}/><h3>Your positions will appear here</h3><p>Add a scrip above. No CSV upload is needed.</p></div> : <div className="table-scroll"><table className="mtf-position-table"><caption>Estimated charges and P/L. Exited rows are excluded from all open totals.</caption><thead><tr>{['Scrip / status', 'Bought / days', 'Qty', 'Buy price', 'Adjusted buy price', 'Current price / source', 'Net P/L', 'P/L %', 'Invested', 'Daily interest', 'Interest till now', 'Other charges', 'Total charges', 'Exit date / actions'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(({ position: p, result: r, current, source, priceAt }) => <tr key={p.id} className={r.closed ? 'mtf-closed' : ''}>
+      {!positions.length ? <div className="mtf-empty"><Wallet size={32}/><h3>Your positions will appear here</h3><p>Add a scrip above. No CSV upload is needed.</p></div> : <div className="table-scroll"><table className="mtf-position-table"><caption>Estimated charges and P/L. Exited rows are excluded from all open totals.</caption><thead><tr>{['Scrip / status', 'Bought / days', 'Qty', 'Buy price', 'Adjusted buy price', 'Current price / source', 'Net P/L', 'P/L %', 'Invested', 'Daily interest', 'Interest till now', 'Other charges', 'Total charges'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(({ position: p, result: r, current, source, priceAt }) => <tr key={p.id} className={r.closed ? 'mtf-closed' : ''}>
         <td><strong>{p.symbol}</strong><span className={`mtf-status ${r.closed ? 'closed' : ''}`}>{r.closed ? 'EXITED' : 'OPEN'}</span><button className="mtf-edit" aria-label={`Edit ${p.symbol}`} onClick={() => { setEditing(p.id); setForm({ symbol: p.symbol, boughtDate: p.boughtDate, quantity: String(p.quantity), buyPriceInr: p.buyPriceInr, interestPerDayInr: p.interestPerDayInr, otherChargesInr: p.otherChargesInr, currentPrice: p.manualPrice?.priceInr ?? '', exitDate: p.exitDate ?? '' }); }}><Pencil size={13}/> Edit</button></td>
         <td>{p.boughtDate}<small>{r.days} days{r.closed && ' · frozen at exit'}</small></td><td>{p.quantity}</td><td>{inr(p.buyPriceInr)}</td>
-        <td className="mtf-adjusted"><strong>{inr(r.adjustedBuyPriceInr)}</strong><small>₹{r.adjustedBuyPriceInr} / share</small></td><td>{r.closed ? '—' : inr(current)}<small>{r.closed ? 'Excluded from open valuation' : source}</small>{!r.closed && priceAt && <small>{new Date(priceAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</small>}</td><td className={r.closed ? '' : color(r.pnlInr)}>{inr(r.pnlInr)}</td><td className={r.closed ? '' : color(r.pnlPct)}>{percent(r.pnlPct)}</td><td>{inr(r.investedInr)}</td><td>{inr(p.interestPerDayInr)}</td><td>{inr(r.interestInr)}</td><td>{inr(p.otherChargesInr)}</td><td>{inr(r.totalChargesInr)}</td><td>{r.closed ? <strong>Exited {p.exitDate}</strong> : <><input type="date" min={p.boughtDate} max={today} aria-label={`Exit date for ${p.symbol}`} value={exitDates[p.id] ?? today} onChange={e => setExitDates(d => ({ ...d, [p.id]: e.target.value }))}/><button className="mtf-secondary" disabled={!!storageError} onClick={() => close(p)}>Mark exited</button></>}</td>
-      </tr>)}</tbody><tfoot><tr><td colSpan={4}>OPEN TOTALS</td><td colSpan={2}>{summary.priced}/{summary.count} priced</td><td className={color(summary.pnlInr)}>{inr(summary.pnlInr)}</td><td className={color(summary.pnlPct)}>{percent(summary.pnlPct)}</td><td>{inr(summary.investedInr)}</td><td>—</td><td>{inr(summary.interestInr)}</td><td>—</td><td>{inr(summary.chargesInr)}</td><td>Exited excluded</td></tr></tfoot></table></div>}
+        <td className="mtf-adjusted"><strong>{inr(r.adjustedBuyPriceInr)}</strong><small>₹{r.adjustedBuyPriceInr} / share</small></td><td>{r.closed ? '—' : inr(current)}<small>{r.closed ? 'Excluded from open valuation' : source}</small>{!r.closed && priceAt && <small>{new Date(priceAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</small>}</td><td className={r.closed ? '' : color(r.pnlInr)}>{inr(r.pnlInr)}</td><td className={r.closed ? '' : color(r.pnlPct)}>{percent(r.pnlPct)}</td><td>{inr(r.investedInr)}</td><td>{inr(p.interestPerDayInr)}</td><td>{inr(r.interestInr)}</td><td>{inr(p.otherChargesInr)}</td><td>{inr(r.totalChargesInr)}</td>
+      </tr>)}</tbody><tfoot><tr><td colSpan={4}>OPEN TOTALS</td><td colSpan={2}>{summary.priced}/{summary.count} priced</td><td className={color(summary.pnlInr)}>{inr(summary.pnlInr)}</td><td className={color(summary.pnlPct)}>{percent(summary.pnlPct)}</td><td>{inr(summary.investedInr)}</td><td>—</td><td>{inr(summary.interestInr)}</td><td>—</td><td>{inr(summary.chargesInr)}</td></tr></tfoot></table></div>}
     </section>
   </div>;
 }

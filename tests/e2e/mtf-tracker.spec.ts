@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 test('manual MTF add, calculations, persistence, edit and greyed exit remove open totals', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: 'MTF Tracker', exact: true }).click();
   await expect(page.getByRole('button', { name: 'MTF Import', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Exit date (optional)', { exact: true })).toHaveCount(0);
   const today = await page.evaluate(() => new Date(Date.now() + 19_800_000).toISOString().slice(0, 10));
   const bought = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 86_400_000).toISOString().slice(0, 10);
   await page.getByLabel('Scrip symbol', { exact: true }).fill('SYNTHETIC');
@@ -19,7 +20,12 @@ test('manual MTF add, calculations, persistence, edit and greyed exit remove ope
   await page.screenshot({ path: '/tmp/tradelens-manual-mtf.png', fullPage: true });
   await page.reload(); await page.getByRole('button', { name: 'MTF Tracker', exact: true }).click();
   await expect(row).toContainText('SYNTHETIC');
-  await page.getByRole('button', { name: 'Mark exited', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Mark exited', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /Exit date/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit SYNTHETIC', exact: true }).click();
+  await page.getByLabel('Exit date (optional)', { exact: true }).fill(today);
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByLabel('Exit date (optional)', { exact: true })).toHaveCount(0);
   await expect(row).toHaveClass(/mtf-closed/); await expect(row).toContainText('EXITED');
   await expect(page.getByText(/0 open positions/)).toBeVisible();
   await page.getByRole('button', { name: 'Edit SYNTHETIC', exact: true }).click();
