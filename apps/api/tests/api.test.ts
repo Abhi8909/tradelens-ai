@@ -72,3 +72,65 @@ test('rejects malformed filters and unknown endpoints', async () => withApi(asyn
   assert.equal((await fetch(`${base}/api/stocks?trend=guess`)).status, 400);
   assert.equal((await fetch(`${base}/api/missing`)).status, 404);
 }));
+
+const portfolioRequest = {
+  portfolio: {
+    capital: 100000,
+    positions: [
+      { symbol: 'DEMO-ALPHA', sector: 'Industrials', quantity: 100, entryPrice: 200, stopPrice: 180, borrowedAmount: 10000, estimatedFees: 40 },
+      { symbol: 'DEMO-BETA', sector: 'Financial Services', quantity: 50, entryPrice: 400, stopPrice: null, borrowedAmount: 0, estimatedFees: 30 }
+    ]
+  },
+  scenarios: [
+    { name: 'Flat', marketMovePct: 0, holdingDays: 30, annualInterestPct: 12 },
+    { name: 'Industrials shock', marketMovePct: -5, sectorMovesPct: { Industrials: -25 }, holdingDays: 30, annualInterestPct: 12 }
+  ],
+  limits: { maxPositionPct: 15, maxTotalRiskPct: 5 }
+};
+const postPortfolio = (base: string, body: unknown, contentType = 'application/json') =>
+  fetch(`${base}/api/portfolio-scenarios`, { method: 'POST', headers: { 'content-type': contentType }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+
+test('portfolio endpoint returns analysis, scenario comparison and explained limit checks', async () => withApi(async (base) => {
+  const response = await postPortfolio(base, portfolioRequest);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.source, 'hypothetical-user-input');
+  assert.equal(body.analysis.grossExposure, 40000);
+  assert.equal(body.analysis.cashRemaining, 70000);
+  assert.deepEqual(body.scenarios.map((s: { name: string }) => s.name), ['Flat', 'Industrials shock']);
+  assert.equal(body.worstScenario, 'Industrials shock');
+  assert.equal(body.scenarios[1].positions[0].moveSource, 'sector');
+  const checks = Object.fromEntries(body.checks.map((c: { id: string }) => [c.id, c]));
+  assert.equal(checks.maxPositionPct.status, 'breach');
+  assert.equal(checks.maxTotalRiskPct.status, 'not-evaluable');
+  assert.equal(body.checks.length, 2, 'unset limits are not reported');
+}));
+
+test('portfolio endpoint validates every part of the request', async () => withApi(async (base) => {
+  const cases: [unknown, string][] = [
+    [[], 'Expected { portfolio, scenarios, limits }'],
+    [{ ...portfolioRequest, portfolio: { ...portfolioRequest.portfolio, capital: -1 } }, 'Invalid portfolio'],
+    [{ ...portfolioRequest, portfolio: { capital: 1000, positions: [{ ...portfolioRequest.portfolio.positions[0], entryPrice: 0 }] } }, 'Invalid portfolio'],
+    [{ ...portfolioRequest, scenarios: [{ name: 'Bad', marketMovePct: -150, holdingDays: 1, annualInterestPct: 1 }] }, 'Invalid scenarios'],
+    [{ ...portfolioRequest, scenarios: Array(7).fill(portfolioRequest.scenarios[0]) }, 'Invalid scenarios'],
+    [{ ...portfolioRequest, scenarios: [{ ...portfolioRequest.scenarios[0], sectorMovesPct: { Energy: -5 } }] }, 'Invalid scenarios'],
+    [{ ...portfolioRequest, limits: { maxLeverage: 0 } }, 'Invalid risk limits']
+  ];
+  for (const [input, error] of cases) {
+    const response = await postPortfolio(base, input);
+    assert.equal(response.status, 400, error);
+    const body = await response.json();
+    assert.equal(body.error, error);
+    assert.equal(body.analysis, undefined);
+    if (error !== 'Expected { portfolio, scenarios, limits }') assert.ok(body.details.length > 0);
+  }
+  assert.equal((await postPortfolio(base, '{nope')).status, 400);
+  assert.equal((await postPortfolio(base, portfolioRequest, 'text/plain')).status, 415);
+  assert.equal((await postPortfolio(base, { padding: 'x'.repeat(70_000) })).status, 400, 'oversized body');
+}));
+
+test('existing scenario endpoint keeps its 16 KB body limit', async () => withApi(async (base) => {
+  const response = await fetch(`${base}/api/scenarios`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ padding: 'x'.repeat(20_000) }) });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'Invalid or oversized JSON body');
+}));
