@@ -75,3 +75,26 @@ curl -X POST http://127.0.0.1:4000/api/scenarios \
 ```
 
 `GET /api/stocks/:symbol/candles` accepts an optional `limit` (plain integer, 1–90, default 90) and returns the latest `limit` synthetic sessions, oldest first, as `{ source, symbol, requested, count, candles }`. `count` can be lower than `requested` when history is sparse. Any other `limit` value returns `400` with no candle data.
+
+### Portfolio risk simulator
+
+`POST /api/portfolio-scenarios` is stateless: it validates a hypothetical long-only portfolio, compares up to 6 price scenarios and checks your own optional risk limits. Nothing is stored.
+
+```bash
+curl -X POST http://127.0.0.1:4000/api/portfolio-scenarios \
+  -H 'content-type: application/json' \
+  -d '{"portfolio":{"capital":100000,"positions":[{"symbol":"DEMO-ALPHA","sector":"Industrials","quantity":100,"entryPrice":200,"stopPrice":180,"borrowedAmount":10000,"estimatedFees":40}]},
+       "scenarios":[{"name":"Market -10%","marketMovePct":-10,"sectorMovesPct":{},"holdingDays":30,"annualInterestPct":12}],
+       "limits":{"maxPositionPct":20,"maxTotalRiskPct":5,"requireStops":true}}'
+```
+
+- **Request:** `portfolio` (capital and 1–50 positions, unique symbols), `scenarios` (0–6), `limits` (each optional; `null` or missing means not set). The body limit is 64 KB.
+- **Response:** `{ source, analysis, scenarios, worstScenario, checks }`. Invalid input returns `400 { error, details[] }`.
+- **Conventions:**
+  - Positions are valued at their entry price, a planning view rather than live marking to market.
+  - Weights are shown both as % of capital (used for the limits) and as % of gross exposure (used for HHI and effective positions).
+  - Risk to stop includes fees.
+  - Financing is simple interest, ACT/365, the same as `/api/scenarios`.
+  - Price moves resolve symbol, then sector, then market.
+  - Ending cash = capital + net P&L. `lossExceedsCapital` and per-position `loanShortfall` flag leveraged losses.
+- **Limits:** a limit that can't be checked (for example, risk per position when a stop is missing) is reported as `not-evaluable`, not as passing.

@@ -34,3 +34,45 @@ export type ThesisVersion = { version: number; asOf: string; changeNote: string;
 /** Append-only: versions[0] is the original thesis and is never rewritten. */
 export type Thesis = { id: string; createdAt: string; versions: ThesisVersion[] };
 export type Result<T> = { ok: true; value: T } | { ok: false; errors: string[] };
+/** Hypothetical long position. Valued at entryPrice: a planning view, not a live mark-to-market. */
+export type PortfolioPosition = {
+  symbol: string; sector: string; quantity: number; entryPrice: number;
+  stopPrice: number | null; borrowedAmount: number; estimatedFees: number;
+};
+export type Portfolio = { capital: number; positions: PortfolioPosition[] };
+/** Price moves resolve symbol > sector > market. Financing is simple interest, ACT/365. */
+export type PortfolioScenario = {
+  name: string; marketMovePct: number; sectorMovesPct: Record<string, number>; symbolMovesPct: Record<string, number>;
+  holdingDays: number; annualInterestPct: number;
+};
+/** Every limit is optional (null = not set). Percentages are of account capital. */
+export type RiskLimits = {
+  maxPositionPct: number | null; maxSectorPct: number | null; maxLeverage: number | null;
+  maxRiskPerPositionPct: number | null; maxTotalRiskPct: number | null; maxScenarioLossPct: number | null;
+  requireStops: boolean;
+};
+export type PositionExposure = {
+  symbol: string; sector: string; marketValue: number; weightPct: number; capitalPct: number;
+  ownFunds: number; borrowedAmount: number; riskToStop: number | null; riskToStopPct: number | null;
+};
+export type SectorExposure = { sector: string; marketValue: number; weightPct: number; capitalPct: number; symbols: string[] };
+export type PortfolioAnalysis = {
+  capital: number; grossExposure: number; borrowedTotal: number; ownFundsUsed: number; cashRemaining: number; leverage: number;
+  positions: PositionExposure[]; sectors: SectorExposure[];
+  largestPosition: { symbol: string; capitalPct: number; weightPct: number };
+  herfindahl: number; effectivePositions: number;
+  totalRiskToStop: number | null; totalRiskToStopPct: number | null; positionsWithoutStop: string[];
+};
+export type PositionScenarioOutcome = {
+  symbol: string; movePct: number; moveSource: 'symbol' | 'sector' | 'market'; exitPrice: number;
+  grossPnl: number; financingCost: number; estimatedFees: number; netPnl: number; loanShortfall: number;
+};
+export type PortfolioScenarioResult = {
+  name: string; positions: PositionScenarioOutcome[];
+  grossPnl: number; financingCost: number; estimatedFees: number; netPnl: number;
+  returnOnCapitalPct: number; endingCash: number; lossExceedsCapital: boolean; worstPosition: string;
+};
+export type RiskCheck = {
+  id: keyof RiskLimits; status: 'pass' | 'breach' | 'not-evaluable';
+  limit: number | boolean; actual: number | null; subjects: string[]; message: string;
+};

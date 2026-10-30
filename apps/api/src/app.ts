@@ -3,20 +3,23 @@ import { URL } from 'node:url';
 import { listStocks, getStock, getCandles } from './market.ts';
 import { simulatePosition } from '../../../packages/core/src/scenario.ts';
 import { MAX_CANDLE_LIMIT, latestCandles, parseCandleLimit } from '../../../packages/core/src/chart.ts';
-import type { PositionScenarioInput } from '../../../packages/core/src/types.ts';
+import {
+  PORTFOLIO_LIMITS, analyzePortfolio, compareScenarios, evaluateRiskLimits, validatePortfolio, validateRiskLimits, validateScenario
+} from '../../../packages/core/src/portfolio.ts';
+import type { PortfolioScenario, PositionScenarioInput } from '../../../packages/core/src/types.ts';
 
 const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 function send(response: ServerResponse, status: number, body: unknown) {
   response.writeHead(status, headers);
   response.end(JSON.stringify(body));
 }
-async function jsonBody(request: IncomingMessage): Promise<unknown> {
+async function jsonBody(request: IncomingMessage, maxBytes = 16_384): Promise<unknown> {
   const parts: Buffer[] = [];
   let length = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     length += buffer.length;
-    if (length > 16_384) throw new Error('Body exceeds 16 KB');
+    if (length > maxBytes) throw new Error(`Body exceeds ${maxBytes} bytes`);
     parts.push(buffer);
   }
   return JSON.parse(Buffer.concat(parts).toString('utf8'));
@@ -77,6 +80,30 @@ export function createApp() {
         } catch (error) {
           return send(response, 400, { error: error instanceof Error ? error.message : 'Invalid input' });
         }
+      }
+      if (request.method === 'POST' && path === '/api/portfolio-scenarios') {
+        if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
+        let input: unknown;
+        try { input = await jsonBody(request, 65_536); } catch { return send(response, 400, { error: 'Invalid or oversized JSON body' }); }
+        if (!input || typeof input !== 'object' || Array.isArray(input)) return send(response, 400, { error: 'Expected { portfolio, scenarios, limits }' });
+        const body = input as Record<string, unknown>;
+        const portfolio = validatePortfolio(body.portfolio);
+        if (!portfolio.ok) return send(response, 400, { error: 'Invalid portfolio', details: portfolio.errors });
+        const rawScenarios = body.scenarios ?? [];
+        if (!Array.isArray(rawScenarios) || rawScenarios.length > PORTFOLIO_LIMITS.maxScenarios) {
+          return send(response, 400, { error: 'Invalid scenarios', details: [`scenarios must be a list of at most ${PORTFOLIO_LIMITS.maxScenarios}`] });
+        }
+        const scenarios = rawScenarios.map((s, i) => validateScenario(s, portfolio.value, `scenario ${i + 1}`));
+        const scenarioErrors = scenarios.flatMap((s) => s.ok ? [] : s.errors);
+        if (scenarioErrors.length) return send(response, 400, { error: 'Invalid scenarios', details: scenarioErrors });
+        const limits = validateRiskLimits(body.limits ?? {});
+        if (!limits.ok) return send(response, 400, { error: 'Invalid risk limits', details: limits.errors });
+        const analysis = analyzePortfolio(portfolio.value);
+        const comparison = compareScenarios(portfolio.value, scenarios.map((s) => (s as { ok: true; value: PortfolioScenario }).value));
+        return send(response, 200, {
+          source: 'hypothetical-user-input', analysis, scenarios: comparison.results, worstScenario: comparison.worst,
+          checks: evaluateRiskLimits(analysis, limits.value, comparison.results)
+        });
       }
       return send(response, 404, { error: 'Endpoint not found' });
     } catch {
