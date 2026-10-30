@@ -35,7 +35,7 @@ npm run typecheck           # after npm install
 npm run build               # after npm install, builds the web frontend
 ```
 
-The Node API and domain tests run independently of external packages, using Node 22's experimental TypeScript type stripping (you may see an experimental warning). The web app depends on React/Vite from npm.
+The Node API and domain tests use Node 22's experimental TypeScript type stripping (you may see an experimental warning). Run `npm ci` first; MTF domain calculations depend on `decimal.js`. The web app depends on React/Vite from npm.
 
 ## Thesis journal (browser-local)
 
@@ -199,3 +199,26 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for secrets, gateway configuration, provider
 contracts, monitoring, backup/rollback and limitations.
 
 Run browser tests with `npx playwright install chromium` then `npm run test:e2e`.
+
+## MTF tracker — Phase 1 domain engine
+
+`packages/core/src/mtf/` provides pure decimal-safe interest, financing, lot
+lifecycle, fee allocation, valuation and estimated break-even calculations.
+Original buy price, cost-adjusted price and financing principal remain separate;
+closed/converted histories stay outside open totals. Tests use wholly synthetic
+positions. No MTF screen, CSV import, storage, API or live broker feed is added
+in this phase. See [MTF_PHASE1.md](MTF_PHASE1.md) for the architecture audit,
+phased plan, calculation conventions, validation scope and remaining work.
+
+## MTF import — Phase 2 (browser-local)
+
+Run `npm run dev`, open **MTF Import**, and choose **Load synthetic example** to
+try preview, diagnostics, corrections, reconciliation and explicit confirmation.
+For your own CSV, supply an account label, broker label, snapshot date and date
+format before previewing. Files stay in browser memory; download the private
+audit before refresh/close. Navigation between app tabs preserves the workspace.
+
+Confirmed rows remain **IMPORTED_UNVERIFIED** evidence, not finalized trades or
+open portfolio totals. No MTF API, persistence or broker feed is introduced.
+See [MTF_PHASE2.md](MTF_PHASE2.md) for instructions, privacy boundaries, parser
+limits, duplicate protection, screenshots and test results.
