@@ -7,3 +7,4 @@ export * from './thesisStore.ts';
 export * from './portfolio.ts';
 export * from './marketData.ts';
 export * from './backtest.ts';
+export * from './mtf/index.ts';

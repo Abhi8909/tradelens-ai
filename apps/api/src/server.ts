@@ -2,6 +2,7 @@ import { createApp } from './app.ts';
 import { createProviderFromEnv } from './providers/config.ts';
 import { ProviderError } from './providers/types.ts';
 import { researchProviderFromEnv } from './research.ts';
+import { mtfQuoteFeedFromEnv } from './mtfQuotes.ts';
 import { securityFromEnv } from './security.ts';
 
 const port = Number(process.env.API_PORT ?? 4000);
@@ -11,7 +12,7 @@ try { provider = createProviderFromEnv(process.env); } catch (error) {
   console.error(error instanceof ProviderError ? error.message : 'Could not configure market data provider');
   process.exit(1);
 }
-const server = createApp(provider, { ...securityFromEnv(process.env), research: researchProviderFromEnv(process.env) });
+const server = createApp(provider, { ...securityFromEnv(process.env), research: researchProviderFromEnv(process.env), mtfQuoteFeed: mtfQuoteFeedFromEnv(process.env) });
 server.requestTimeout = 15_000;
 server.headersTimeout = 10_000;
 server.keepAliveTimeout = 5_000;
