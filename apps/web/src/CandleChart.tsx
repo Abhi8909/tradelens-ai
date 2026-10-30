@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { CANDLE_RANGES, candleGeometry, summarizeCandles, type CandleRange, type CandleShape } from '../../../packages/core/src/chart.ts';
 import type { Candle } from '../../../packages/core/src/types.ts';
+import type { DataProvenance } from '../../../packages/core/src/marketData.ts';
+import { dataKindLabel } from './DataSource.tsx';
 
-type CandlesPayload = { source: string; symbol: string; requested: number; count: number; candles: Candle[] };
+type CandlesPayload = { source: string; symbol: string; requested: number; count: number; candles: Candle[]; provenance?: DataProvenance };
 const WIDTH = 600;
 const HEIGHT = 160;
 const COLORS = { up: '#48d9aa', down: '#fa8290', flat: '#8190ad' };
@@ -45,16 +47,16 @@ export default function CandleChart({ symbol }: { symbol: string }) {
       </g>)}
     </svg>
     <p id={summaryId} className="chart-summary">
-      {symbol}, {summary.sessions} synthetic sessions from {summary.firstDate} to {summary.lastDate}: opened at {rupees.format(summary.firstOpen)} and
+      {symbol}, {summary.sessions} {payload.provenance?.kind === 'licensed' ? '' : 'synthetic '}sessions from {summary.firstDate} to {summary.lastDate}: opened at {rupees.format(summary.firstOpen)} and
       closed at {rupees.format(summary.lastClose)} ({pct(summary.changePct)}). Range high {rupees.format(summary.high)} on {summary.highDate},
       low {rupees.format(summary.low)} on {summary.lowDate}. {summary.upSessions} up and {summary.downSessions} down sessions.
     </p>
-    {payload.count < payload.requested && <p className="chart-note">Only {payload.count} of {payload.requested} requested sessions exist in the demo history.</p>}
+    {payload.count < payload.requested && <p className="chart-note">Only {payload.count} of {payload.requested} requested sessions are available from this source.</p>}
   </>;
 
   return <div className="candle-chart">
     <div className="chart-toolbar">
-      <span className="chart-label">Daily candles · demo data</span>
+      <span className="chart-label">Daily candles · {dataKindLabel(payload?.provenance)}</span>
       <div className="range-group" role="group" aria-label="Chart range">
         {CANDLE_RANGES.map(r => <button key={r} type="button" className={`range-btn ${r === range ? 'active' : ''}`} aria-pressed={r === range} onClick={() => setRange(r)}>{r}D</button>)}
       </div>

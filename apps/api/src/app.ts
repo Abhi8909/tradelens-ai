@@ -1,12 +1,21 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
-import { listStocks, getStock, getCandles } from './market.ts';
+import { MARKET_SYMBOL, buildStockSummary, type DataProvenance, type Instrument, type ProviderKind } from '../../../packages/core/src/marketData.ts';
+import { createDemoProvider } from './providers/demo.ts';
+import { ProviderError, type CandleResult, type MarketDataProvider } from './providers/types.ts';
 import { simulatePosition } from '../../../packages/core/src/scenario.ts';
 import { MAX_CANDLE_LIMIT, latestCandles, parseCandleLimit } from '../../../packages/core/src/chart.ts';
 import {
   PORTFOLIO_LIMITS, analyzePortfolio, compareScenarios, evaluateRiskLimits, validatePortfolio, validateRiskLimits, validateScenario
 } from '../../../packages/core/src/portfolio.ts';
-import type { PortfolioScenario, PositionScenarioInput } from '../../../packages/core/src/types.ts';
+import type { PortfolioScenario, PositionScenarioInput, StockSummary } from '../../../packages/core/src/types.ts';
+
+const SOURCES: Record<ProviderKind, string> = { demo: 'synthetic-demo', fixture: 'synthetic-fixture', licensed: 'licensed-provider' };
+const WARNINGS: Record<ProviderKind, string> = {
+  demo: 'No real market data is served',
+  fixture: 'Synthetic fixture data for testing; not market data',
+  licensed: 'Licensed provider data: check provenance and freshness flags before relying on it'
+};
 
 const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 function send(response: ServerResponse, status: number, body: unknown) {
@@ -24,6 +33,11 @@ async function jsonBody(request: IncomingMessage, maxBytes = 16_384): Promise<un
   }
   return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
+/** Provider problems are an upstream failure (502), never a crash; credentials never appear in the body. */
+function providerFailure(response: ServerResponse, error: unknown) {
+  if (!(error instanceof ProviderError)) throw error;
+  return send(response, 502, { error: 'Market data provider unavailable', code: error.code });
+}
 function numberInRange(raw: string | null, fallback: number, min: number, max: number): number | null {
   if (raw === null) return fallback;
   if (!raw.trim()) return null;
@@ -31,13 +45,14 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp() {
+export function createApp(provider: MarketDataProvider = createDemoProvider()) {
+  const source = SOURCES[provider.info.kind];
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const path = url.pathname;
     try {
       if (request.method === 'GET' && path === '/api/health') {
-        return send(response, 200, { status: 'ok', source: 'synthetic-demo', warning: 'No real market data is served' });
+        return send(response, 200, { status: 'ok', source, warning: WARNINGS[provider.info.kind], provider: provider.info });
       }
       if (request.method === 'GET' && path === '/api/stocks') {
         const search = (url.searchParams.get('q') ?? '').trim().toLowerCase().slice(0, 80);
@@ -47,25 +62,49 @@ export function createApp() {
         if (minRsi === null || maxRsi === null || minRsi > maxRsi || !['all', 'above-sma', 'below-sma'].includes(trend)) {
           return send(response, 400, { error: 'Invalid screener filters' });
         }
-        const data = listStocks().filter((s) =>
-          (s.name.toLowerCase().includes(search) || s.symbol.toLowerCase().includes(search)) &&
-          (trend === 'all' || s.trend === trend) &&
-          s.rsi14 !== null && s.rsi14 >= minRsi && s.rsi14 <= maxRsi
-        );
-        return send(response, 200, { source: 'synthetic-demo', count: data.length, data });
+        let instruments: Instrument[];
+        try { instruments = await provider.listInstruments(); } catch (error) { return providerFailure(response, error); }
+        // Filter by name first so a remote provider is only asked for candles it needs.
+        const matching = instruments.filter((i) => i.name.toLowerCase().includes(search) || i.symbol.toLowerCase().includes(search));
+        const settled = await Promise.allSettled(matching.map((i) => provider.getCandles(i.symbol)));
+        const data: (StockSummary & { provenance: DataProvenance })[] = [];
+        const unavailable: { symbol: string; reason: string }[] = [];
+        settled.forEach((outcome, index) => {
+          const instrument = matching[index];
+          if (outcome.status === 'rejected') {
+            if (!(outcome.reason instanceof ProviderError)) throw outcome.reason;
+            unavailable.push({ symbol: instrument.symbol, reason: outcome.reason.code });
+            return;
+          }
+          const stock = buildStockSummary(instrument, outcome.value.candles);
+          if (!stock) unavailable.push({ symbol: instrument.symbol, reason: 'insufficient-data' });
+          else if ((trend === 'all' || stock.trend === trend) && stock.rsi14 !== null && stock.rsi14 >= minRsi && stock.rsi14 <= maxRsi) {
+            data.push({ ...stock, provenance: outcome.value.provenance });
+          }
+        });
+        return send(response, 200, { source, count: data.length, data, unavailable, provider: provider.info });
       }
-      const match = /^\/api\/stocks\/([A-Z0-9-]+)(?:\/(candles))?$/.exec(path);
+      const match = /^\/api\/stocks\/([^/]+)(?:\/(candles))?$/.exec(path);
       if (request.method === 'GET' && match) {
-        const symbol = match[1];
-        const stock = getStock(symbol);
-        if (!stock) return send(response, 404, { error: 'Unknown demo symbol' });
-        if (match[2] === 'candles') {
-          const limit = parseCandleLimit(url.searchParams.get('limit'));
-          if (limit === null) return send(response, 400, { error: `limit must be an integer from 1 to ${MAX_CANDLE_LIMIT}` });
-          const candles = latestCandles(getCandles(symbol) ?? [], limit);
-          return send(response, 200, { source: 'synthetic-demo', symbol, requested: limit, count: candles.length, candles });
+        const unknown = () => send(response, 404, { error: provider.info.kind === 'demo' ? 'Unknown demo symbol' : 'Unknown symbol' });
+        let symbol: string;
+        try { symbol = decodeURIComponent(match[1]); } catch { return unknown(); }
+        if (!MARKET_SYMBOL.test(symbol)) return unknown();
+        let instrument: Instrument | undefined;
+        try { instrument = (await provider.listInstruments()).find((i) => i.symbol === symbol); } catch (error) { return providerFailure(response, error); }
+        if (!instrument) return unknown();
+        const limit = match[2] === 'candles' ? parseCandleLimit(url.searchParams.get('limit')) : MAX_CANDLE_LIMIT;
+        if (limit === null) return send(response, 400, { error: `limit must be an integer from 1 to ${MAX_CANDLE_LIMIT}` });
+        let result: CandleResult;
+        try { result = await provider.getCandles(symbol); } catch (error) {
+          if (error instanceof ProviderError && error.code === 'not-found') return unknown();
+          return providerFailure(response, error);
         }
-        return send(response, 200, { source: 'synthetic-demo', stock });
+        if (match[2] === 'candles') {
+          const candles = latestCandles(result.candles, limit);
+          return send(response, 200, { source, symbol, requested: limit, count: candles.length, candles, provenance: result.provenance });
+        }
+        return send(response, 200, { source, stock: buildStockSummary(instrument, result.candles), provenance: result.provenance });
       }
       if (request.method === 'POST' && path === '/api/scenarios') {
         if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });

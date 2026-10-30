@@ -5,3 +5,4 @@ export * from './chart.ts';
 export * from './thesis.ts';
 export * from './thesisStore.ts';
 export * from './portfolio.ts';
+export * from './marketData.ts';
