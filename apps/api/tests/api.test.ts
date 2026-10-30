@@ -134,3 +134,43 @@ test('existing scenario endpoint keeps its 16 KB body limit', async () => withAp
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error, 'Invalid or oversized JSON body');
 }));
+
+const backtestRequest = {
+  symbol: 'DEMO-ALPHA',
+  config: {
+    initialCapital: 100000,
+    strategy: { name: 'SMA trend', entry: [{ kind: 'close-above-sma', period: 10 }], exit: [{ kind: 'close-below-sma', period: 10 }], stopLossPct: 5, takeProfitPct: null, maxHoldingDays: 20 },
+    sizing: { mode: 'fraction', fraction: 1 },
+    costs: { perOrder: 20, buyPct: 0.12, sellPct: 0.12, slippageBps: 10 },
+    periods: { trainEnd: '2026-08-14', testEnd: '2026-09-11' }
+  }
+};
+const postBacktest = (base: string, body: unknown, contentType = 'application/json') =>
+  fetch(`${base}/api/backtests`, { method: 'POST', headers: { 'content-type': contentType }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+
+test('backtest endpoint runs on provider candles and is reproducible', async () => withApi(async (base) => {
+  const first = await postBacktest(base, backtestRequest);
+  assert.equal(first.status, 200);
+  const body = await first.json();
+  assert.equal(body.source, 'synthetic-demo');
+  assert.equal(body.provenance.kind, 'demo');
+  assert.deepEqual(Object.keys(body.result.periods), ['train', 'test', 'outOfSample']);
+  assert.equal(body.result.periods.train.metrics.startDate, '2026-06-01');
+  assert.equal(body.result.periods.test.metrics.startDate > '2026-08-14', true);
+  assert.ok(body.result.warnings.some((w: string) => /too few to judge|No trades/.test(w)), 'short demo history is flagged');
+  const again = await (await postBacktest(base, backtestRequest)).json();
+  assert.equal(JSON.stringify(again.result), JSON.stringify(body.result));
+}));
+
+test('backtest endpoint validates input and periods', async () => withApi(async (base) => {
+  const invalid = await postBacktest(base, { ...backtestRequest, config: { ...backtestRequest.config, sizing: { mode: 'all-in' } } });
+  assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).details.join(' '), /sizing mode/);
+  assert.equal((await postBacktest(base, { ...backtestRequest, symbol: 'demo alpha' })).status, 400);
+  assert.equal((await postBacktest(base, { ...backtestRequest, symbol: 'DEMO-NOPE' })).status, 404);
+  const empty = await postBacktest(base, { ...backtestRequest, config: { ...backtestRequest.config, periods: { trainEnd: '2026-09-30', testEnd: '2026-10-02' } } });
+  assert.equal(empty.status, 400);
+  assert.match((await empty.json()).details[0], /outOfSample period needs at least 2 sessions/);
+  assert.equal((await postBacktest(base, backtestRequest, 'text/plain')).status, 415);
+  assert.equal((await postBacktest(base, '{nope')).status, 400);
+}));
