@@ -63,11 +63,11 @@ export function createApp(provider: MarketDataProvider = createDemoProvider(), o
         try { raw = await jsonBody(request, 4096); } catch { return send(response, 400, { error: 'Invalid quote request' }); }
         const symbols = raw && typeof raw === 'object' ? (raw as { symbols?: unknown }).symbols : null;
         if (!Array.isArray(symbols) || !symbols.length || symbols.length > 50 || new Set(symbols).size !== symbols.length || symbols.some(s => typeof s !== 'string' || !MARKET_SYMBOL.test(s))) return send(response, 400, { error: 'Expected 1–50 unique scrip symbols' });
-        if (!options.mtfQuoteFeed) return send(response, 503, { error: 'Automatic prices need a configured licensed NSE quote feed. You can enter current prices manually.', code: 'QUOTE_FEED_NOT_CONFIGURED' });
+        if (!options.mtfQuoteFeed) return send(response, 503, { error: 'Automatic quote feed is disabled. You can enter current prices manually.', code: 'QUOTE_FEED_NOT_CONFIGURED' });
         try {
           const quotes = validateMtfQuotes(await options.mtfQuoteFeed.getQuotes(symbols), symbols, Date.now());
           return send(response, 200, { quotes, unavailable: symbols.filter(s => !quotes.some(q => q.symbol === s)), fetchedAt: new Date().toISOString() });
-        } catch { return send(response, 502, { error: 'Price feed unavailable. Previous prices may be stale.' }); }
+        } catch { return send(response, 502, { error: 'Quote service unavailable or scrip not found. Check the NSE symbol or enter a current price manually.' }); }
       }
       if (request.method === 'POST' && path === '/api/research') {
         if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });

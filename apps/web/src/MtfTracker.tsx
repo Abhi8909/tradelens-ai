@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Plus, RefreshCw, Pencil, Wallet, TrendingUp, Receipt, CalendarDays } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, RefreshCw, Pencil, Wallet, TrendingUp, Receipt, CalendarDays, Info } from 'lucide-react';
 import { calculateManualMtf, MANUAL_MTF_STORAGE_KEY, parseManualMtfStorage, summarizeManualMtf, validateManualMtfPosition, type ManualMtfPosition } from '../../../packages/core/src/mtf/manual.ts';
 import { D, istDay } from '../../../packages/core/src/mtf/decimal.ts';
 import type { MtfPrice } from '../../api/src/mtfQuotes.ts';
@@ -9,6 +10,45 @@ const inr = (value: string | null) => {
   const fixed = new D(value).toFixed(2); const [whole, fraction] = fixed.replace('-', '').split('.');
   return `${fixed.startsWith('-') ? '-' : ''}₹${new Intl.NumberFormat('en-IN').format(BigInt(whole))}.${fraction}`;
 };
+type QuoteState = 'LIVE' | 'DELAYED' | 'EOD' | 'MANUAL' | 'STALE' | 'UNAVAILABLE';
+function QuoteTimestamp({ at, source }: { at: string; source: string }) {
+  const id = useId();
+  const [position, setPosition] = useState<{ left: number; top: number; below: boolean } | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const show = () => {
+    const rect = button.current?.getBoundingClientRect();
+    if (!rect) return;
+    const below = rect.top < 52;
+    setPosition({ left: Math.min(window.innerWidth - 132, Math.max(132, rect.left + rect.width / 2)), top: below ? rect.bottom + 8 : rect.top - 8, below });
+  };
+  useEffect(() => {
+    if (!position) return;
+    const hide = () => setPosition(null);
+    window.addEventListener('scroll', hide, true); window.addEventListener('resize', hide);
+    return () => { window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide); };
+  }, [position]);
+  return <>
+    <button ref={button} type="button" className="mtf-quote-info" aria-label={`Quote timestamp: ${source}`} aria-describedby={position ? id : undefined}
+      onMouseEnter={show} onMouseLeave={() => setPosition(null)} onFocus={show} onBlur={() => setPosition(null)} onClick={show} onKeyDown={event => { if (event.key === 'Escape') setPosition(null); }}>
+      <Info size={15} aria-hidden="true"/>
+    </button>
+    {position && createPortal(<div id={id} role="tooltip" className={`mtf-quote-tooltip${position.below ? ' below' : ''}`} style={{ left: position.left, top: position.top }}>
+      {new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+    </div>, document.body)}
+  </>;
+}
+function PriceQuote({ price, source, state, at, closed }: { price: string | null; source: string; state: QuoteState; at: string | null; closed: boolean }) {
+  if (closed) return <div className="mtf-quote mtf-quote-exited"><strong>—</strong><span>Exited position</span></div>;
+  const label = source.startsWith('NSE official MCP') ? 'NSE' : state === 'MANUAL' ? 'Manual entry' : state === 'UNAVAILABLE' ? 'No quote' : 'Market feed';
+  const status = { LIVE: 'Live', DELAYED: 'Delayed', EOD: 'LTP', MANUAL: 'Unverified', STALE: 'Stale', UNAVAILABLE: 'Unavailable' }[state];
+  return <div className="mtf-quote">
+    <strong className="mtf-quote-value">{inr(price)}</strong>
+    <div className="mtf-quote-meta">
+      {at && <QuoteTimestamp at={at} source={label}/>}
+      <span className={`mtf-quote-badge mtf-quote-${state.toLowerCase()}`}>{status}</span>
+    </div>
+  </div>;
+}
 const percent = (value: string | null) => value === null ? '—' : `${Number(value) > 0 ? '+' : ''}${value}%`;
 const color = (value: string | null) => value === null ? '' : Number(value) < 0 ? 'down' : Number(value) > 0 ? 'up' : '';
 const readableError = (error: unknown) => {
@@ -91,7 +131,8 @@ export default function MtfTracker({ active }: { active: boolean }) {
     const manual = position.manualPrice;
     const current = fresh ? quote.priceInr : manual?.priceInr ?? null;
     return { position, result: calculateManualMtf(position, today, current), current,
-      source: fresh ? `${quote.source} · ${quote.mode}` : manual ? 'Manual · unverified' : quote ? `${quote.source} · STALE` : 'Price unavailable',
+      source: fresh ? quote.source : manual ? 'Manual entry · unverified' : quote ? quote.source : 'Price unavailable',
+      quoteState: (fresh ? quote.mode : manual ? 'MANUAL' : quote ? 'STALE' : 'UNAVAILABLE') as QuoteState,
       priceAt: fresh ? quote.marketAt : manual?.at ?? quote?.marketAt ?? null };
   });
   const summary = summarizeManualMtf(rows.map(r => r.result));
@@ -101,7 +142,7 @@ export default function MtfTracker({ active }: { active: boolean }) {
   return <div className="mtf-tracker">
     <div className="mtf-heading"><div><p className="eyebrow">YOUR POSITIONS · BROWSER LOCAL</p><h2>MTF portfolio</h2><p>As of {today} · Asia/Kolkata · flat daily-interest estimates</p></div><button className="mtf-secondary" disabled={refreshing || symbols === '[]'} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={16}/>{refreshing ? 'Refreshing…' : 'Refresh prices'}</button></div>
     <button className="mtf-secondary mtf-backup" onClick={backup}>Download private backup</button>
-    <p className="mtf-notice">Saved only in this browser. Only open scrip symbols are sent for prices. Prices refresh every 2½ minutes while this screen is open. Daily interest and charges are your estimates, not reconciled broker costs.</p>
+    <p className="mtf-notice">Saved only in this browser. Only open scrip symbols are sent for prices. Prices refresh every 2½ minutes while this screen is open. NSE quotes are delayed, informational and for non-commercial use. Daily interest and charges are your estimates, not reconciled broker costs.</p>
     {storageError && <p className="error-panel" role="alert">{storageError}</p>}
     <section className="mtf-cards" aria-label="Open MTF totals">{[
       ['Open invested amount', inr(summary.investedInr), Wallet], ['Interest till now', inr(summary.interestInr), CalendarDays],
@@ -117,10 +158,10 @@ export default function MtfTracker({ active }: { active: boolean }) {
     </section>
     {error && <p role="alert" className="error-panel">{error}</p>}
     <section className="panel mtf-positions"><div className="section-head"><h3>Positions</h3><span className="tag">Open + exited history</span></div>
-      {!positions.length ? <div className="mtf-empty"><Wallet size={32}/><h3>Your positions will appear here</h3><p>Add a scrip above. No CSV upload is needed.</p></div> : <div className="table-scroll"><table className="mtf-position-table"><caption>Estimated charges and P/L. Exited rows are excluded from all open totals.</caption><thead><tr>{['Scrip / status', 'Bought / days', 'Qty', 'Buy price', 'Adjusted buy price', 'Current price / source', 'Net P/L', 'P/L %', 'Invested', 'Daily interest', 'Interest till now', 'Other charges', 'Total charges'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(({ position: p, result: r, current, source, priceAt }) => <tr key={p.id} className={r.closed ? 'mtf-closed' : ''}>
+      {!positions.length ? <div className="mtf-empty"><Wallet size={32}/><h3>Your positions will appear here</h3><p>Add a scrip above. No CSV upload is needed.</p></div> : <div className="table-scroll"><table className="mtf-position-table"><caption>Estimated charges and P/L. Exited rows are excluded from all open totals.</caption><thead><tr>{['Scrip / status', 'Bought / days', 'Qty', 'Buy price', 'Adjusted buy price', 'Current price', 'Net P/L', 'P/L %', 'Invested', 'Daily interest', 'Interest till now', 'Other charges', 'Total charges'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(({ position: p, result: r, current, source, quoteState, priceAt }) => <tr key={p.id} className={r.closed ? 'mtf-closed' : ''}>
         <td><strong>{p.symbol}</strong><span className={`mtf-status ${r.closed ? 'closed' : ''}`}>{r.closed ? 'EXITED' : 'OPEN'}</span><button className="mtf-edit" aria-label={`Edit ${p.symbol}`} onClick={() => { setEditing(p.id); setForm({ symbol: p.symbol, boughtDate: p.boughtDate, quantity: String(p.quantity), buyPriceInr: p.buyPriceInr, interestPerDayInr: p.interestPerDayInr, otherChargesInr: p.otherChargesInr, currentPrice: p.manualPrice?.priceInr ?? '', exitDate: p.exitDate ?? '' }); }}><Pencil size={13}/> Edit</button></td>
         <td>{p.boughtDate}<small>{r.days} days{r.closed && ' · frozen at exit'}</small></td><td>{p.quantity}</td><td>{inr(p.buyPriceInr)}</td>
-        <td className="mtf-adjusted"><strong>{inr(r.adjustedBuyPriceInr)}</strong><small>₹{r.adjustedBuyPriceInr} / share</small></td><td>{r.closed ? '—' : inr(current)}<small>{r.closed ? 'Excluded from open valuation' : source}</small>{!r.closed && priceAt && <small>{new Date(priceAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</small>}</td><td className={r.closed ? '' : color(r.pnlInr)}>{inr(r.pnlInr)}</td><td className={r.closed ? '' : color(r.pnlPct)}>{percent(r.pnlPct)}</td><td>{inr(r.investedInr)}</td><td>{inr(p.interestPerDayInr)}</td><td>{inr(r.interestInr)}</td><td>{inr(p.otherChargesInr)}</td><td>{inr(r.totalChargesInr)}</td>
+        <td className="mtf-adjusted"><strong>{inr(r.adjustedBuyPriceInr)}</strong><small>₹{r.adjustedBuyPriceInr} / share</small></td><td className="mtf-quote-cell"><PriceQuote price={current} source={source} state={quoteState} at={priceAt} closed={r.closed}/></td><td className={r.closed ? '' : color(r.pnlInr)}>{inr(r.pnlInr)}</td><td className={r.closed ? '' : color(r.pnlPct)}>{percent(r.pnlPct)}</td><td>{inr(r.investedInr)}</td><td>{inr(p.interestPerDayInr)}</td><td>{inr(r.interestInr)}</td><td>{inr(p.otherChargesInr)}</td><td>{inr(r.totalChargesInr)}</td>
       </tr>)}</tbody><tfoot><tr><td colSpan={4}>OPEN TOTALS</td><td colSpan={2}>{summary.priced}/{summary.count} priced</td><td className={color(summary.pnlInr)}>{inr(summary.pnlInr)}</td><td className={color(summary.pnlPct)}>{percent(summary.pnlPct)}</td><td>{inr(summary.investedInr)}</td><td>—</td><td>{inr(summary.interestInr)}</td><td>—</td><td>{inr(summary.chargesInr)}</td></tr></tfoot></table></div>}
     </section>
   </div>;

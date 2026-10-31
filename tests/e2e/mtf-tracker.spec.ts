@@ -45,6 +45,18 @@ test('MTF refreshes quotes every 150 seconds without sending quantity or financi
   await page.reload(); await page.clock.install();
   await page.getByRole('button', { name: 'MTF Tracker', exact: true }).click();
   await expect(page.locator('.mtf-position-table tbody tr')).toContainText('1,000.00');
+  const info = page.getByRole('button', { name: 'Quote timestamp: Market feed', exact: true });
+  await expect(info).not.toHaveAttribute('title');
+  await expect(page.locator('.mtf-quote-meta')).toHaveText('Delayed');
+  await info.hover();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText(/^\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(am|pm) IST$/);
+  expect(await info.evaluate(element => getComputedStyle(element).cursor)).toBe('pointer');
+  const bounds = await tooltip.boundingBox(); expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  await page.mouse.move(0, 0); await expect(tooltip).not.toBeVisible();
+  await info.focus(); await expect(tooltip).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(tooltip).not.toBeVisible();
   await page.clock.runFor(150_100);
   await expect(page.locator('.mtf-position-table tbody tr .down')).toHaveCount(2);
   expect(calls).toBeGreaterThanOrEqual(2);
