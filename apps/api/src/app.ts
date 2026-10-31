@@ -12,6 +12,7 @@ import {
 import type { PortfolioScenario, PositionScenarioInput, StockSummary } from '../../../packages/core/src/types.ts';
 import { mockResearchProvider, runResearch, validateResearchInput, type ResearchProvider } from './research.ts';
 import { validateMtfQuotes, type MtfQuoteFeed } from './mtfQuotes.ts';
+import type { MtfService } from './mtf/service.ts';
 import { createGuard, type ApiOptions } from './security.ts';
 
 const SOURCES: Record<ProviderKind, string> = { demo: 'synthetic-demo', fixture: 'synthetic-fixture', licensed: 'licensed-provider' };
@@ -49,7 +50,7 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed } = {}) {
+export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed; mtf?: MtfService } = {}) {
   const source = SOURCES[provider.info.kind];
   const guard = createGuard(options);
   return createServer(async (request, response) => {
@@ -57,6 +58,7 @@ export function createApp(provider: MarketDataProvider = createDemoProvider(), o
       if (!guard(request, response)) return;
       const url = new URL(request.url ?? '/', 'http://localhost');
       const path = url.pathname;
+      if (options.mtf && await options.mtf.handle(request, response, url)) return;
       if (request.method === 'POST' && path === '/api/mtf/quotes') {
         if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
         let raw: unknown;

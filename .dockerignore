@@ -1,0 +1,13 @@
+.git
+node_modules
+apps/web/dist
+.data
+docs
+*.md
+*.csv
+.env
+.env.*
+!.env.example
+artifacts
+test-results
+playwright-report

@@ -15,6 +15,7 @@ export type MtfConversion = MtfEventBase & {
   kind: 'CONVERT'; quantity: number; destinationLotId: string; principalRepaidInr: string | null;
 };
 export type MtfEvent = MtfSale | MtfConversion
+  | (MtfEventBase & { kind: 'EXIT_UNPRICED'; quantity: number; principalRepaidInr: string | null })
   | (MtfEventBase & { kind: 'FUNDING'; effectiveDate: string; direction: 'BORROW' | 'REPAY'; amountInr: string })
   | (MtfEventBase & { kind: 'SPLIT' | 'BONUS'; numerator: number; denominator: number })
   | (MtfEventBase & { kind: 'RENAME'; instrument: MtfInstrument });
@@ -38,6 +39,8 @@ export type MtfRate = {
 };
 export type MtfInterestPolicy = {
   id: string; startOffsetDays: number;
+  /** Optional user-estimated flat daily cost, prorated by remaining original units. */
+  flatDailyInr?: string;
   /** Exit-day interest uses balance before sale/conversion repayments if true. */
   includeExitDay: boolean; rounding: MtfRounding; rates: MtfRate[];
 };
@@ -59,7 +62,7 @@ export type MtfInterestDay = {
   varianceInr: string | null; evidence: 'ACTUAL' | 'ESTIMATED' | 'UNKNOWN'; references: string[];
 };
 export type MtfExitAllocation = {
-  eventId: string; at: string; kind: 'SELL' | 'CONVERT'; quantity: number; destinationLotId: string | null;
+  eventId: string; at: string; kind: 'SELL' | 'CONVERT' | 'EXIT_UNPRICED'; quantity: number; destinationLotId: string | null;
   originalCostInr: string; allocatedCostsInr: string | null; proceedsInr: string | null;
   principalRepaidInr: string | null; realizedPnlInr: string | null;
 };
