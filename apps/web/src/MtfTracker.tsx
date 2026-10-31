@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, RefreshCw, Pencil, Wallet, TrendingUp, Receipt, CalendarDays, Info } from 'lucide-react';
 import { calculateManualMtf, MANUAL_MTF_STORAGE_KEY, parseManualMtfStorage, summarizeManualMtf, validateManualMtfPosition, type ManualMtfPosition } from '../../../packages/core/src/mtf/manual.ts';
 import { D, istDay } from '../../../packages/core/src/mtf/decimal.ts';
@@ -10,6 +11,32 @@ const inr = (value: string | null) => {
   return `${fixed.startsWith('-') ? '-' : ''}₹${new Intl.NumberFormat('en-IN').format(BigInt(whole))}.${fraction}`;
 };
 type QuoteState = 'LIVE' | 'DELAYED' | 'EOD' | 'MANUAL' | 'STALE' | 'UNAVAILABLE';
+function QuoteTimestamp({ at, source }: { at: string; source: string }) {
+  const id = useId();
+  const [position, setPosition] = useState<{ left: number; top: number; below: boolean } | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const show = () => {
+    const rect = button.current?.getBoundingClientRect();
+    if (!rect) return;
+    const below = rect.top < 52;
+    setPosition({ left: Math.min(window.innerWidth - 132, Math.max(132, rect.left + rect.width / 2)), top: below ? rect.bottom + 8 : rect.top - 8, below });
+  };
+  useEffect(() => {
+    if (!position) return;
+    const hide = () => setPosition(null);
+    window.addEventListener('scroll', hide, true); window.addEventListener('resize', hide);
+    return () => { window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide); };
+  }, [position]);
+  return <>
+    <button ref={button} type="button" className="mtf-quote-info" aria-label={`Quote timestamp: ${source}`} aria-describedby={position ? id : undefined}
+      onMouseEnter={show} onMouseLeave={() => setPosition(null)} onFocus={show} onBlur={() => setPosition(null)} onClick={show} onKeyDown={event => { if (event.key === 'Escape') setPosition(null); }}>
+      <Info size={15} aria-hidden="true"/>
+    </button>
+    {position && createPortal(<div id={id} role="tooltip" className={`mtf-quote-tooltip${position.below ? ' below' : ''}`} style={{ left: position.left, top: position.top }}>
+      {new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+    </div>, document.body)}
+  </>;
+}
 function PriceQuote({ price, source, state, at, closed }: { price: string | null; source: string; state: QuoteState; at: string | null; closed: boolean }) {
   if (closed) return <div className="mtf-quote mtf-quote-exited"><strong>—</strong><span>Exited position</span></div>;
   const label = source.startsWith('NSE official MCP') ? 'NSE' : state === 'MANUAL' ? 'Manual entry' : state === 'UNAVAILABLE' ? 'No quote' : 'Market feed';
@@ -17,7 +44,7 @@ function PriceQuote({ price, source, state, at, closed }: { price: string | null
   return <div className="mtf-quote">
     <strong className="mtf-quote-value">{inr(price)}</strong>
     <div className="mtf-quote-meta">
-      <span className="mtf-quote-source" title={at ? `${new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : undefined} tabIndex={at ? 0 : undefined} aria-label={at ? `${label}: ${new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : label}>{label}<Info size={13} aria-hidden="true"/></span>
+      {at && <QuoteTimestamp at={at} source={label}/>}
       <span className={`mtf-quote-badge mtf-quote-${state.toLowerCase()}`}>{status}</span>
     </div>
   </div>;
