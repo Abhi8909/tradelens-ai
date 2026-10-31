@@ -23,7 +23,8 @@ test('MTF quote validation rejects wrong symbols, impossible prices, timestamps 
   assert.throws(() => validateMtfQuotes([q, q], ['SYNTHETIC'], now));
 });
 test('MTF quote configuration requires licensed HTTPS credentials and no URL credentials', () => {
-  assert.equal(mtfQuoteFeedFromEnv({}), undefined);
+  assert.ok(mtfQuoteFeedFromEnv({}));
+  assert.equal(mtfQuoteFeedFromEnv({ MTF_QUOTE_PROVIDER: 'disabled' }), undefined);
   assert.throws(() => mtfQuoteFeedFromEnv({ MTF_QUOTE_URL: 'http://example.com' }));
   assert.throws(() => mtfQuoteFeedFromEnv({ MTF_QUOTE_URL: 'https://user:secret@example.com', MTF_QUOTE_API_KEY: 'secret', MTF_QUOTE_LICENSE: 'test' }));
   assert.ok(mtfQuoteFeedFromEnv({ MTF_QUOTE_URL: 'https://example.com/quotes', MTF_QUOTE_API_KEY: 'secret', MTF_QUOTE_LICENSE: 'Synthetic adapter test configuration' }));

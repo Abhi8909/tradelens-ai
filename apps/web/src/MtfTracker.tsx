@@ -101,7 +101,7 @@ export default function MtfTracker({ active }: { active: boolean }) {
   return <div className="mtf-tracker">
     <div className="mtf-heading"><div><p className="eyebrow">YOUR POSITIONS · BROWSER LOCAL</p><h2>MTF portfolio</h2><p>As of {today} · Asia/Kolkata · flat daily-interest estimates</p></div><button className="mtf-secondary" disabled={refreshing || symbols === '[]'} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={16}/>{refreshing ? 'Refreshing…' : 'Refresh prices'}</button></div>
     <button className="mtf-secondary mtf-backup" onClick={backup}>Download private backup</button>
-    <p className="mtf-notice">Saved only in this browser. Only open scrip symbols are sent for prices. Prices refresh every 2½ minutes while this screen is open. Daily interest and charges are your estimates, not reconciled broker costs.</p>
+    <p className="mtf-notice">Saved only in this browser. Only open scrip symbols are sent for prices. Prices refresh every 2½ minutes while this screen is open. NSE quotes are delayed, informational and for non-commercial use. Daily interest and charges are your estimates, not reconciled broker costs.</p>
     {storageError && <p className="error-panel" role="alert">{storageError}</p>}
     <section className="mtf-cards" aria-label="Open MTF totals">{[
       ['Open invested amount', inr(summary.investedInr), Wallet], ['Interest till now', inr(summary.interestInr), CalendarDays],

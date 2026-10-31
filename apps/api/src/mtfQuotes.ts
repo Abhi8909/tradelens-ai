@@ -1,4 +1,5 @@
 import { amount, instant } from '../../../packages/core/src/mtf/decimal.ts';
+import { createNseMcpQuoteFeed } from './nseMcpQuotes.ts';
 import { MARKET_SYMBOL } from '../../../packages/core/src/marketData.ts';
 
 export type MtfPrice = { symbol: string; priceInr: string; marketAt: string; source: string; mode: 'LIVE' | 'DELAYED' | 'EOD' };
@@ -12,9 +13,12 @@ export function validateMtfQuotes(raw: unknown, symbols: string[], now: number):
     ids.add(q.symbol); return { symbol: q.symbol, priceInr: q.priceInr, marketAt: q.marketAt, source: q.source, mode: q.mode };
   });
 }
-/** A user-operated licensed adapter, not an NSE website scraper. */
+/** Default: official no-auth NSE MCP for informational/non-commercial use. Optional licensed adapter. */
 export function mtfQuoteFeedFromEnv(env: NodeJS.ProcessEnv): MtfQuoteFeed | undefined {
-  if (!env.MTF_QUOTE_URL && !env.MTF_QUOTE_API_KEY && !env.MTF_QUOTE_LICENSE) return undefined;
+  const provider = env.MTF_QUOTE_PROVIDER ?? (env.MTF_QUOTE_URL || env.MTF_QUOTE_API_KEY || env.MTF_QUOTE_LICENSE ? 'http' : 'nse');
+  if (provider === 'disabled') return undefined;
+  if (provider === 'nse') return createNseMcpQuoteFeed();
+  if (provider !== 'http') throw new Error('MTF_QUOTE_PROVIDER must be nse, http or disabled');
   let url: URL;
   try { url = new URL(env.MTF_QUOTE_URL ?? ''); } catch { throw new Error('Invalid MTF quote configuration'); }
   if (url.protocol !== 'https:' || url.username || url.password || !env.MTF_QUOTE_API_KEY || !env.MTF_QUOTE_LICENSE?.trim()) throw new Error('MTF quotes require HTTPS, private credentials and a data license');
