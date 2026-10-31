@@ -30,5 +30,4 @@
 .mtf-quote-delayed,.mtf-quote-manual{background:#302a1b;border-color:#655332;color:#f3d397}
 .mtf-quote-stale,.mtf-quote-unavailable{background:#32232c;border-color:#654152;color:#f1b6c6}
 .mtf-quote-live{background:#16372e;border-color:#326b59;color:#81e3ba}
-.mtf-quote-time{display:flex;align-items:center;justify-content:flex-end;gap:5px;color:#a8b8d0;font-size:11px;line-height:1.4;white-space:nowrap}
 .mtf-quote-exited{color:#a9b0bd;font-size:11px}.mtf-quote-exited strong{font-size:20px}
