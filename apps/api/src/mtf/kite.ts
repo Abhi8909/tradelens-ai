@@ -22,6 +22,8 @@ export class KiteReadOnlyClient {
   }
   async exchange(requestToken: string): Promise<KiteCredentials> {
     assertHttp(/^[A-Za-z0-9_-]{8,200}$/.test(requestToken), 400, 'Invalid broker request token');
+    // Kite Connect's session API mandates checksum = SHA-256(api_key + request_token + api_secret).
+    // It is a one-off request signature sent to Kite, not a stored password hash, so a slow KDF would be rejected.
     const checksum = createHash('sha256').update(this.config.apiKey + requestToken + this.config.apiSecret).digest('hex');
     const data = await this.request('/session/token', undefined, new URLSearchParams({ api_key: this.config.apiKey, request_token: requestToken, checksum }));
     assertHttp(typeof data.access_token === 'string' && typeof data.user_id === 'string', 502, 'Invalid broker credentials response');
