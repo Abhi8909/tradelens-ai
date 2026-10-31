@@ -1,3 +1,5 @@
+import { createRolloverRoutes } from './rollovers/routes.ts';
+import type { BhavcopyProvider } from './rollovers/provider.ts';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import { MARKET_SYMBOL, buildStockSummary, type DataProvenance, type Instrument, type ProviderKind } from '../../../packages/core/src/marketData.ts';
@@ -50,14 +52,16 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed; mtf?: MtfService } = {}) {
+export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed; mtf?: MtfService; rolloverProvider?: BhavcopyProvider } = {}) {
   const source = SOURCES[provider.info.kind];
   const guard = createGuard(options);
+  const rollovers = createRolloverRoutes(options.rolloverProvider);
   return createServer(async (request, response) => {
     try {
       if (!guard(request, response)) return;
       const url = new URL(request.url ?? '/', 'http://localhost');
       const path = url.pathname;
+      if (rollovers(request, response, url)) return;
       if (options.mtf && await options.mtf.handle(request, response, url)) return;
       if (request.method === 'POST' && path === '/api/mtf/quotes') {
         if (!request.headers['content-type']?.startsWith('application/json')) return send(response, 415, { error: 'Expected application/json' });
