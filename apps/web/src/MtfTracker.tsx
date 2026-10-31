@@ -13,12 +13,12 @@ type QuoteState = 'LIVE' | 'DELAYED' | 'EOD' | 'MANUAL' | 'STALE' | 'UNAVAILABLE
 function PriceQuote({ price, source, state, at, closed }: { price: string | null; source: string; state: QuoteState; at: string | null; closed: boolean }) {
   if (closed) return <div className="mtf-quote mtf-quote-exited"><strong>—</strong><span>Exited position</span></div>;
   const label = source.startsWith('NSE official MCP') ? 'NSE' : state === 'MANUAL' ? 'Manual entry' : state === 'UNAVAILABLE' ? 'No quote' : 'Market feed';
-  const status = { LIVE: 'Live', DELAYED: 'Delayed', EOD: 'EOD', MANUAL: 'Unverified', STALE: 'Stale', UNAVAILABLE: 'Unavailable' }[state];
+  const status = { LIVE: 'Live', DELAYED: 'Delayed', EOD: 'LTP', MANUAL: 'Unverified', STALE: 'Stale', UNAVAILABLE: 'Unavailable' }[state];
   const timestamp = at ? new Date(at) : null;
   return <div className="mtf-quote">
     <strong className="mtf-quote-value">{inr(price)}</strong>
     <div className="mtf-quote-meta">
-      <details className="mtf-quote-source"><summary aria-label={`Price source details: ${label}`}>{label}<Info size={13} aria-hidden="true"/></summary><div className="mtf-quote-provenance">{source}{at && <span>{new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</span>}</div></details>
+      <details className="mtf-quote-source"><summary aria-label={`Price source details: ${label}`}>{label}<Info size={13} aria-hidden="true"/></summary><div className="mtf-quote-provenance">{source}{state === 'EOD' && <span>Last traded price · end-of-day observation</span>}{at && <span>{new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</span>}</div></details>
       <span className={`mtf-quote-badge mtf-quote-${state.toLowerCase()}`}>{status}</span>
     </div>
     {timestamp && <time className="mtf-quote-time" dateTime={at!}><Clock3 size={12} aria-hidden="true"/>{timestamp.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}<span aria-hidden="true">·</span>{timestamp.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })} IST</time>}
