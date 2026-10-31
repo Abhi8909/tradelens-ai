@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tradelens
+      POSTGRES_USER: tradelens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a private database password}
+    volumes:
+      - mtf-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U tradelens -d tradelens]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:?Set the PostgreSQL URL using host postgres}
+      MTF_ENCRYPTION_KEY: ${MTF_ENCRYPTION_KEY:?Set a persistent 64-hex-character encryption key}
+      MTF_APP_ORIGIN: ${MTF_APP_ORIGIN:?Set the public HTTPS origin}
+      MTF_ALLOW_REGISTRATION: ${MTF_ALLOW_REGISTRATION:-false}
+      API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:?Set a private workspace gateway token}
+      MTF_QUOTE_PROVIDER: ${MTF_QUOTE_PROVIDER:-nse}
+      KITE_API_KEY: ${KITE_API_KEY:-}
+      KITE_API_SECRET: ${KITE_API_SECRET:-}
+      KITE_REDIRECT_URL: ${KITE_REDIRECT_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      target: web
+    environment:
+      API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:?Use the same private gateway token}
+    ports:
+      - 127.0.0.1:8080:80
+    depends_on:
+      - api
+    restart: unless-stopped
+volumes:
+  mtf-postgres:

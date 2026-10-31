@@ -14,12 +14,14 @@ function validate(lot: MtfLot, options: MtfCalculationOptions) {
   validateSource(lot.buy.source); quantity(lot.buy.quantity);
   requireMtf(amount(lot.buy.priceInr).gt(0));
   const notional = amount(lot.buy.priceInr).mul(lot.buy.quantity).toDecimalPlaces(2);
+  requireMtf(notional.gt(0));
   if (lot.buy.fundedInr !== null) requireMtf(booked(lot.buy.fundedInr).lte(notional), 'INVALID_FUNDING');
   const buyTime = instant(lot.buy.at); const asOf = instant(options.asOf);
   requireMtf(asOf >= buyTime, 'INVALID_CHRONOLOGY');
   requireMtf(dayNumber(istDay(options.asOf)) - dayNumber(istDay(lot.buy.at)) <= 36_600);
   requireMtf(Number.isSafeInteger(options.quoteMaxAgeMs) && options.quoteMaxAgeMs >= 0);
   const policy = options.policy;
+  if (policy.flatDailyInr !== undefined) amount(policy.flatDailyInr);
   requireMtf(!!policy.id && Number.isInteger(policy.startOffsetDays) && policy.startOffsetDays >= 0 && policy.startOffsetDays <= 30 && typeof policy.includeExitDay === 'boolean');
   requireMtf(['DAILY', 'TOTAL'].includes(policy.rounding.timing)); rounding(policy.rounding.mode);
   requireMtf(Array.isArray(policy.rates) && policy.rates.length <= 1000);
@@ -71,10 +73,10 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
     const day = event.kind === 'FUNDING' ? calendarDate(event.effectiveDate) : istDay(event.at);
     requireMtf(day >= start && day <= istDay(event.at), 'INVALID_CHRONOLOGY');
     if (event.kind === 'FUNDING') { requireMtf(['BORROW', 'REPAY'].includes(event.direction)); booked(event.amountInr); }
-    else if (event.kind === 'SELL' || event.kind === 'CONVERT') {
+    else if (event.kind === 'SELL' || event.kind === 'CONVERT' || event.kind === 'EXIT_UNPRICED') {
       quantity(event.quantity);
       if (event.kind === 'SELL') requireMtf(amount(event.priceInr).gt(0));
-      else requireMtf(!!event.destinationLotId && event.destinationLotId !== lot.id);
+      else if (event.kind === 'CONVERT') requireMtf(!!event.destinationLotId && event.destinationLotId !== lot.id);
       if (event.principalRepaidInr !== null) booked(event.principalRepaidInr);
     } else if (event.kind === 'SPLIT' || event.kind === 'BONUS') { quantity(event.numerator); quantity(event.denominator); }
     else if (event.kind === 'RENAME') requireMtf(!!event.instrument.id && !!event.instrument.isin && !!event.instrument.symbol && !!event.instrument.exchange);
@@ -96,7 +98,7 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
       requireMtf(refunded.lte(0) && refunded.abs().lte(original.amountInr));
     } else requireMtf(charge.refundOf === null);
     if (charge.exitId !== null) {
-      const exit = events.find(e => e.id === charge.exitId && (e.kind === 'SELL' || e.kind === 'CONVERT'));
+      const exit = events.find(e => e.id === charge.exitId && (e.kind === 'SELL' || e.kind === 'CONVERT' || e.kind === 'EXIT_UNPRICED'));
       requireMtf(!!exit && day === istDay(exit.at));
     }
     if (charge.kind === 'INTEREST') {
@@ -123,7 +125,7 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
       principal = event.direction === 'BORROW' ? principal.add(event.amountInr) : principal.sub(event.amountInr);
       requireMtf(principal.gte(0) && principal.lte(cost), 'INVALID_FUNDING');
     }
-    const disposalEvents = onDay.filter(e => e.kind === 'SELL' || e.kind === 'CONVERT');
+    const disposalEvents = onDay.filter(e => e.kind === 'SELL' || e.kind === 'CONVERT' || e.kind === 'EXIT_UNPRICED');
     let interestPrincipal = principal;
     if (!options.policy.includeExitDay && interestPrincipal !== null) {
       for (const exit of disposalEvents) {
@@ -139,12 +141,14 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
     if (activeDay) {
       const funded = interestPrincipal;
       if (funded === null) issue('MISSING_FUNDED_BALANCE');
-      if (funded?.gt(0) && !rate && !statement) issue('RATE_GAP');
-      let estimate = funded === null || (funded.gt(0) && !rate) ? null : funded.mul(rate?.dailyFraction ?? '0');
+      if (options.policy.flatDailyInr === undefined && funded?.gt(0) && !rate && !statement) issue('RATE_GAP');
+      let estimate = options.policy.flatDailyInr !== undefined
+        ? amount(options.policy.flatDailyInr).mul(cost).div(purchase)
+        : funded === null || (funded.gt(0) && !rate) ? null : funded.mul(rate?.dailyFraction ?? '0');
       if (estimate !== null && options.policy.rounding.timing === 'DAILY') estimate = estimate.toDecimalPlaces(2, rounding(options.policy.rounding.mode));
       const actual = statement ? statement.reduce((sum, c) => sum.add(c.amountInr), zero()) : null;
       const selected = actual ?? estimate;
-      if (funded === null || funded.gt(0)) bearingDays++;
+      if (options.policy.flatDailyInr !== undefined || funded === null || funded.gt(0)) bearingDays++;
       if (selected === null) unknownInterest = true;
       else { allInterest = allInterest.add(selected); openInterest = openInterest.add(selected); }
       if (actual !== null) { actualInterest = actualInterest.add(actual); hasActual = true; }
@@ -165,7 +169,7 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
       } else if (event.kind === 'RENAME') {
         lastCorporateTime = instant(event.at);
         instrument = structuredClone(event.instrument);
-      } else if (event.kind === 'SELL' || event.kind === 'CONVERT') {
+      } else if (event.kind === 'SELL' || event.kind === 'CONVERT' || event.kind === 'EXIT_UNPRICED') {
         requireMtf(event.quantity <= q, 'INVALID_QUANTITY');
         const ratio = new D(event.quantity).div(q);
         const allocate = (v: InstanceType<typeof D>) => event.quantity === q ? v : v.mul(ratio).toDecimalPlaces(2, rounding(options.policy.rounding.mode));
@@ -182,7 +186,7 @@ function replay(lot: MtfLot, options: MtfCalculationOptions, base: Omit<MtfSnaps
         if (q === 0 && principal !== null) requireMtf(principal.eq(0), 'INVALID_FUNDING');
         const proceeds = event.kind === 'SELL' ? amount(event.priceInr).mul(event.quantity).toDecimalPlaces(2) : null;
         const pnl = proceeds === null || unknownInterest ? null : proceeds.sub(allocatedCost).sub(incurred);
-        if (event.kind === 'SELL') { sold = true; if (pnl === null) realizedUnknown = true; else realized = realized.add(pnl); }
+        if (event.kind !== 'CONVERT') { sold = true; if (pnl === null) realizedUnknown = true; else realized = realized.add(pnl); }
         else converted = true;
         exits.push({ eventId: event.id, at: event.at, kind: event.kind, quantity: event.quantity, destinationLotId: event.kind === 'CONVERT' ? event.destinationLotId : null,
           originalCostInr: money(allocatedCost), allocatedCostsInr: unknownInterest ? null : money(incurred), proceedsInr: proceeds === null ? null : money(proceeds), principalRepaidInr: event.principalRepaidInr, realizedPnlInr: pnl === null ? null : money(pnl) });

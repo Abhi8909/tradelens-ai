@@ -1,0 +1,21 @@
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  client_max_body_size 1m;
+  add_header X-Content-Type-Options nosniff always;
+  add_header X-Frame-Options DENY always;
+  add_header Referrer-Policy no-referrer always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'" always;
+  location /api/ {
+    proxy_pass http://api:4000;
+    proxy_set_header Authorization "Bearer ${API_ACCESS_TOKEN}";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 45s;
+    proxy_hide_header X-Frame-Options;
+    # Never log OAuth request tokens, private account paths or query strings.
+    access_log off;
+  }
+  location / { try_files $uri $uri/ /index.html; }
+}

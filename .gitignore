@@ -94,3 +94,9 @@ apps/web/dist/
 
 # Private MTF reference spreadsheet; never publish holdings
 /C- Open Positions - Sept 04.csv
+
+# Private encrypted portfolio databases, keys and backups
+.data/
+*.sqlite
+*.sqlite-*
+*.sqlite.key
