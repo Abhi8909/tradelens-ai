@@ -45,6 +45,12 @@ Open **MTF Tracker** to start immediately; no feature-specific login is required
 
 Portfolios are stored in an encrypted database, with an automatic workspace identified by a persistent browser cookie. Existing signed-in sessions retain their portfolios. Clearing cookies or switching browsers creates a separate workspace; app-wide login/signup will be added later. Local databases and generated keys live in ignored `.data/`; preserve both. Hosted deployments require PostgreSQL, HTTPS and a stable encryption key. Kite snapshots require review before creating lots and never place broker orders. CSV import is not part of the current UI.
 
+## Futures rollover (synthetic preview)
+
+Open **Futures rollover** in the sidebar or visit **/rollovers**. Explore older months, rollover and spread calculations, sector summaries, a six-month matrix, per-symbol charts and CSV reports. Tooltips explain formulas and missing values.
+
+This stage uses fictional fixtures only. The expiry calendar is synthetic, incomplete months remain visible, and no values are presented as verified NSE data. Futures–spot basis and next–near roll spread are separate metrics. Real-data ZIP uploads, automated downloads, persistence and monthly scheduling are not enabled yet; these require verified UDiFF formats and permitted source access.
+
 ## Checks
 
 ```bash

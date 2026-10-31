@@ -1,0 +1,502 @@
+.roll-dashboard {
+  display: grid;
+  gap: 22px;
+  color: #c9d5ea;
+  font-size: 14px;
+  line-height: 1.6;
+  min-width: 0;
+}
+.roll-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.roll-intro h2 {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  color: #eef3ff;
+  margin: 5px 0;
+}
+.roll-intro p:not(.eyebrow) {
+  color: #98abc8;
+}
+.roll-demo {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 6px 11px;
+  border: 1px solid #756039;
+  border-radius: 6px;
+  color: #f5d18b;
+  background: #30291c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.roll-notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border: 1px solid #4f452f;
+  background: #25241e;
+  border-radius: 12px;
+  color: #dfcfaa;
+}
+.roll-notice svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.roll-controls {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 20px;
+}
+.roll-dashboard label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  color: #9eafc9;
+}
+.roll-dashboard select,
+.roll-dashboard input {
+  background: #0d1729;
+  color: #dce8fd;
+  border: 1px solid #3a4e6e;
+  border-radius: 7px;
+  font: inherit;
+  min-height: 42px;
+  padding: 9px 11px;
+  width: 100%;
+  min-width: 0;
+}
+.roll-controls label {
+  min-width: 210px;
+}
+.roll-date {
+  display: grid;
+  gap: 4px;
+}
+.roll-date span {
+  font-size: 10px;
+  color: #92a6c3;
+}
+.roll-date strong {
+  color: #dce6f7;
+  font-size: 13px;
+}
+.roll-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  background: #1c2e49;
+  border: 1px solid #3d5578;
+  border-radius: 7px;
+  color: #d4e3fa;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  min-height: 40px;
+}
+.roll-button:hover {
+  background: #263e5d;
+}
+.roll-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.roll-warning {
+  padding: 15px 18px;
+  background: #35291e;
+  border: 1px solid #7d5f36;
+  border-radius: 10px;
+  color: #f3cf92;
+  overflow-wrap: anywhere;
+}
+.roll-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.roll-kpis > div {
+  display: grid;
+  gap: 9px;
+  padding: 20px;
+}
+.roll-kpis span {
+  font-size: 11px;
+  color: #a7b8d0;
+}
+.roll-kpis strong {
+  font-size: 25px;
+  letter-spacing: -0.03em;
+  color: #e6efff;
+  font-variant-numeric: tabular-nums;
+}
+.roll-kpis small {
+  font-size: 10px;
+  color: #91a4bf;
+}
+.roll-two-col {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+}
+.roll-trend,
+.roll-method {
+  padding: 22px;
+  min-width: 0;
+}
+.roll-dashboard h3 {
+  font-size: 16px;
+  color: #d8e5fa;
+}
+.roll-trend > p,
+.roll-method > p {
+  font-size: 11px;
+  color: #98abc7;
+  margin-top: 8px;
+}
+.roll-chart {
+  margin: 18px 0 0;
+}
+.roll-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.roll-chart text {
+  fill: #a6b8d1;
+  font-size: 9px;
+}
+.roll-chart figcaption {
+  font-size: 10px;
+  color: #90a4c1;
+  margin-top: 9px;
+}
+.roll-method dl {
+  display: grid;
+  gap: 13px;
+  margin-top: 18px;
+}
+.roll-method dl > div {
+  padding-bottom: 11px;
+  border-bottom: 1px solid #2b3950;
+}
+.roll-method dt {
+  font-size: 11px;
+  font-weight: 600;
+  color: #bcd4f5;
+}
+.roll-method dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.roll-results {
+  padding: 22px;
+  min-width: 0;
+}
+.roll-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.roll-result-head > span {
+  font-size: 11px;
+  color: #95a8c3;
+}
+.roll-tabs {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.roll-tabs button {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #acbdd8;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.roll-tabs button[aria-selected="true"] {
+  border-color: #42618b;
+  background: #233e62;
+  color: #e6f0ff;
+}
+.roll-filters {
+  display: grid;
+  grid-template-columns: 1.3fr 1.1fr 0.7fr 0.7fr 1fr 1fr 1.1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin: 22px 0;
+}
+.roll-filters input,
+.roll-filters select {
+  font-size: 11px;
+}
+.roll-table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+}
+.roll-table-controls p,
+.roll-help {
+  font-size: 11px;
+  color: #9baec9;
+}
+.roll-scroll {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid #2a3d59;
+  border-radius: 9px;
+  margin: 16px 0;
+}
+.roll-dashboard table,
+.roll-dialog table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 650px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.roll-dashboard th,
+.roll-dialog th {
+  padding: 13px 14px;
+  background: #0e192b;
+  color: #a7bcda;
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.roll-dashboard td,
+.roll-dialog td {
+  padding: 17px 14px;
+  text-align: right;
+  border-top: 1px solid #26374e;
+  color: #cfddf2;
+  white-space: nowrap;
+}
+.roll-dashboard th:first-child,
+.roll-dashboard td:first-child,
+.roll-dialog th:first-child,
+.roll-dialog td:first-child {
+  text-align: left;
+}
+.roll-stock-table th:first-child,
+.roll-stock-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: #122037;
+  z-index: 1;
+  box-shadow: 3px 0 6px #0002;
+}
+.roll-dashboard th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.roll-dashboard td small {
+  display: block;
+  font-size: 9px;
+  color: #91a5c0;
+  margin-top: 5px;
+}
+.roll-dashboard td.roll-emphasis {
+  color: #b7d5ff;
+  background: #1b2d47;
+  font-weight: 700;
+}
+.roll-dashboard td.up {
+  color: #70d7b2;
+}
+.roll-dashboard td.down {
+  color: #f190a4;
+}
+.roll-symbol {
+  font: inherit;
+  font-weight: 600;
+  color: #b9d4ff;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  min-height: 30px;
+}
+.roll-symbol:hover {
+  text-decoration: underline;
+}
+.roll-quality {
+  display: inline-flex;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 9px;
+  border: 1px solid #4b5570;
+  background: #242d43;
+  color: #c5d1eb;
+}
+.roll-quality.incomplete {
+  border-color: #745a30;
+  background: #30291b;
+  color: #edcf93;
+}
+.roll-stock-table caption {
+  text-align: left;
+  padding: 11px 14px;
+  font-size: 10px;
+  color: #96aaca;
+  caption-side: bottom;
+}
+.roll-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #9eafc9;
+}
+.roll-matrix-select {
+  max-width: 230px;
+  margin: 18px 0;
+}
+.roll-source-status {
+  margin-top: 20px;
+}
+.roll-source-status p {
+  margin: 12px 0;
+  font-size: 12px;
+  color: #abbcd5;
+}
+.roll-empty {
+  padding: 24px;
+  color: #99adca;
+  font-size: 12px;
+}
+.roll-dialog {
+  width: min(920px, calc(100vw - 30px));
+  max-height: 90vh;
+  overflow: auto;
+  margin: auto;
+  padding: 28px;
+  border: 1px solid #415b7f;
+  border-radius: 15px;
+  background: #101c30;
+  color: #c6d5ec;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.roll-dialog::backdrop {
+  background: #040a15c9;
+  backdrop-filter: blur(4px);
+}
+.roll-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+.roll-dialog > header button {
+  background: #1c304e;
+  color: #d4e3fa;
+  border: 1px solid #405c7e;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+}
+.roll-dialog h2 {
+  font-size: 25px;
+  color: #e5efff;
+  margin-top: 10px;
+}
+.roll-dialog h3 {
+  margin: 22px 0 12px;
+  color: #d9e8ff;
+}
+.roll-dialog details {
+  padding: 12px;
+  background: #16263f;
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.roll-dialog code {
+  font-size: 10px;
+}
+.roll-dashboard :focus-visible,
+.roll-dialog :focus-visible {
+  outline: 2px solid #9cc2ff;
+  outline-offset: 3px;
+}
+@media (max-width: 1250px) {
+  .roll-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .roll-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .roll-two-col {
+    grid-template-columns: 1fr;
+  }
+  .roll-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .roll-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .roll-controls {
+    gap: 15px;
+  }
+  .roll-controls label {
+    width: 100%;
+  }
+  .roll-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .roll-intro h2 {
+    font-size: 23px;
+  }
+  .roll-results,
+  .roll-trend,
+  .roll-method {
+    padding: 16px;
+  }
+  .roll-kpis > div {
+    padding: 15px;
+  }
+  .roll-kpis strong {
+    font-size: 22px;
+  }
+  .roll-table-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .roll-notice {
+    font-size: 12px;
+  }
+  .roll-dialog {
+    padding: 18px;
+  }
+}
