@@ -19,15 +19,11 @@
 .mtf-quote{display:flex;flex-direction:column;align-items:flex-end;gap:7px;min-width:195px}
 .mtf-quote-value{color:#f1f5fb;font-size:20px;font-weight:700;line-height:1.25;letter-spacing:-.025em;white-space:nowrap}
 .mtf-quote-meta{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:8px;width:100%}
-.mtf-quote-source{max-width:205px;text-align:right;color:#b9c8de;font-size:12px}
-.mtf-quote-source summary{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:26px;cursor:pointer;list-style:none;border-radius:4px}
-.mtf-quote-source summary::-webkit-details-marker{display:none}
-.mtf-quote-source summary:hover{color:#e2edff}
-.mtf-quote-source summary svg{color:#91a7c6;flex-shrink:0}
-.mtf-quote-provenance{margin:6px 0;padding:10px 12px;text-align:left;line-height:1.6;background:#0b1424;border:1px solid #31435f;border-radius:7px;overflow-wrap:anywhere}
-.mtf-quote-provenance>span{display:block;margin-top:5px;color:#aebed6}
+.mtf-quote-source{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:26px;max-width:205px;border-radius:4px;text-align:right;color:#b9c8de;font-size:12px;cursor:help}
 .mtf-quote-badge{display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border:1px solid #3c516e;border-radius:6px;background:#1a2b44;color:#c6dbf9;font-size:11px;font-weight:700;letter-spacing:.04em;line-height:1.4;text-transform:uppercase;white-space:nowrap}
 .mtf-quote-delayed,.mtf-quote-manual{background:#302a1b;border-color:#655332;color:#f3d397}
 .mtf-quote-stale,.mtf-quote-unavailable{background:#32232c;border-color:#654152;color:#f1b6c6}
 .mtf-quote-live{background:#16372e;border-color:#326b59;color:#81e3ba}
 .mtf-quote-exited{color:#a9b0bd;font-size:11px}.mtf-quote-exited strong{font-size:20px}
+
+.mtf-quote-source:hover{color:#e2edff}.mtf-quote-source svg{color:#91a7c6;flex-shrink:0}

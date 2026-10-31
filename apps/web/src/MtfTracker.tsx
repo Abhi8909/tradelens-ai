@@ -17,7 +17,7 @@ function PriceQuote({ price, source, state, at, closed }: { price: string | null
   return <div className="mtf-quote">
     <strong className="mtf-quote-value">{inr(price)}</strong>
     <div className="mtf-quote-meta">
-      <details className="mtf-quote-source"><summary aria-label={`Price source details: ${label}`}>{label}<Info size={13} aria-hidden="true"/></summary><div className="mtf-quote-provenance">{source}{state === 'EOD' && <span>Last traded price · end-of-day observation</span>}{at && <span>{new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</span>}</div></details>
+      <span className="mtf-quote-source" title={at ? `${new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : undefined} tabIndex={at ? 0 : undefined} aria-label={at ? `${label}: ${new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : label}>{label}<Info size={13} aria-hidden="true"/></span>
       <span className={`mtf-quote-badge mtf-quote-${state.toLowerCase()}`}>{status}</span>
     </div>
   </div>;
