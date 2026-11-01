@@ -211,9 +211,9 @@ function SymbolDrawer({
     >
       <header>
         <div>
-          <span className="roll-demo">DEMO · SYNTHETIC</span>
+          <span className="roll-demo">NSE · SOURCE REPORTS</span>
           <h2 id="roll-symbol-title">{symbol}</h2>
-          <p>{monthName(month)} · no real NSE observations</p>
+          <p>{monthName(month)} · final NSE report observations</p>
         </div>
         <button aria-label="Close rollover details" onClick={onClose}>
           <X size={20} />
@@ -375,6 +375,58 @@ export default function RolloverDashboard() {
     page: "1",
   };
   const [filters, setFilters] = useState(emptyFilters);
+  const [sync, setSync] = useState<{
+    running: boolean;
+    completed: number;
+    total: number;
+    currentMonth: string | null;
+    errors: { month: string; message: string }[];
+  } | null>(null);
+  const [sectorSource, setSectorSource] = useState<{
+    reference: string;
+    url: string;
+    fetchedAt: string;
+    count: number;
+  } | null>(null);
+  const wasSyncing = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const r = await fetch("/api/rollovers/status");
+        if (!r.ok) return;
+        const body = await r.json();
+        if (cancelled) return;
+        setSync(body.status);
+        setSectorSource(body.sectors ?? null);
+        if (wasSyncing.current && !body.status?.running)
+          setReload((n) => n + 1);
+        wasSyncing.current = !!body.status?.running;
+      } catch {
+        /* source state remains visible on next poll */
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+  async function refreshNse() {
+    setError("");
+    try {
+      const r = await fetch("/api/rollovers/refresh", { method: "POST" });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error);
+      setSync(body.status);
+      wasSyncing.current = !!body.status?.running;
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/rollovers/months", { signal: controller.signal })
@@ -384,7 +436,11 @@ export default function RolloverDashboard() {
         setMonths(body.months);
         setMonth(
           (current) =>
-            current || body.latestComplete || body.months.at(-1)?.month || "",
+            current ||
+            body.latestAvailable ||
+            body.latestComplete ||
+            body.months.at(-1)?.month ||
+            "",
         );
       })
       .catch((e) => {
@@ -437,13 +493,14 @@ export default function RolloverDashboard() {
             spread.
           </p>
         </div>
-        <span className="roll-demo">DEMO · SYNTHETIC DATA</span>
+        <span className="roll-demo">NSE · HISTORICAL REPORTS</span>
       </section>
       <p className="roll-notice">
         <Info size={18} />
-        All prices, OI, dates and sectors here are fictional fixtures. No
-        official NSE reports have been imported. Rollover is an OI distribution
-        proxy, not a prediction or proof that individual trades rolled.
+        Downloaded NSE final FO and EQ cash reports on the same pre-expiry
+        trading date. These are historical snapshots, not streaming prices.
+        Rollover is an OI distribution proxy, not a prediction. Sectors use
+        NSE&apos;s current Nifty 500 industry list; other scrips are Unclassified.
       </p>
       <section className="panel roll-controls">
         <label>
@@ -466,19 +523,19 @@ export default function RolloverDashboard() {
         </label>
         <div className="roll-date">
           <span>Snapshot · T−1 trading session</span>
-          <strong>{data?.selected.snapshotDate ?? "—"}</strong>
+          <strong>{data?.selected.snapshotDate || "—"}</strong>
         </div>
         <div className="roll-date">
-          <span>Actual expiry · synthetic calendar</span>
-          <strong>{data?.selected.actualExpiry ?? "—"}</strong>
+          <span>Actual expiry · NSE calendar</span>
+          <strong>{data?.selected.actualExpiry || "—"}</strong>
         </div>
         <button
           className="roll-button"
-          onClick={() => setReload((n) => n + 1)}
-          disabled={loading}
+          onClick={refreshNse}
+          disabled={loading || !!sync?.running}
         >
           <RefreshCw size={15} />
-          Reload fixtures
+          Refresh NSE reports
         </button>
         <a
           className="roll-button"
@@ -503,10 +560,30 @@ export default function RolloverDashboard() {
       {loading && <p role="status">Calculating the selected snapshot…</p>}
       {data && data.selected.status !== "COMPLETE" && (
         <p className="roll-warning" role="status">
-          {data.selected.status}: {data.selected.issues.join("; ")}. Last
-          complete synthetic month: {data.lastComplete ?? "none"}. No earlier
-          data is substituted for this month.
+          {data.selected.status === "INCOMPLETE"
+            ? `${data.selected.issues.length} of ${data.summary.total} scrips need review and are excluded from aggregates: `
+            : `${data.selected.status}: `}
+          {data.selected.issues.join("; ")}. No earlier data is substituted for
+          this month.
         </p>
+      )}
+      {sync?.running && (
+        <p className="roll-notice" role="status">
+          Downloading NSE monthly snapshots: {sync.completed}/{sync.total} ·{" "}
+          {sync.currentMonth ?? "starting"}
+        </p>
+      )}
+      {!!sync?.errors.length && (
+        <details className="roll-warning">
+          <summary>
+            {sync.errors.length} source download(s) need attention
+          </summary>
+          {sync.errors.map((e, i) => (
+            <p key={i}>
+              {e.month}: {e.message}
+            </p>
+          ))}
+        </details>
       )}
       <section className="roll-kpis" aria-label="Rollover snapshot totals">
         {[
@@ -551,7 +628,7 @@ export default function RolloverDashboard() {
             months
           </p>
           <TrendChart
-            label="Synthetic equal-weight market rollover"
+            label="Equal-weight stock futures rollover"
             points={
               data?.trend.map((p) => ({
                 month: p.month,
@@ -609,7 +686,7 @@ export default function RolloverDashboard() {
             Find symbol
             <input
               aria-label="Find rollover symbol"
-              placeholder="Search DEMO symbols"
+              placeholder="Search NSE symbols"
               value={filters.q}
               onChange={(e) => filter("q", e.target.value)}
             />
@@ -704,8 +781,8 @@ export default function RolloverDashboard() {
             <div className="roll-scroll">
               <table className="roll-stock-table">
                 <caption>
-                  {month ? monthName(month) : "Monthly"} snapshot · DEMO ·
-                  missing values are shown as —
+                  {month ? monthName(month) : "Monthly"} snapshot · NSE
+                  historical · missing values are shown as —
                 </caption>
                 <thead>
                   <tr>
@@ -797,11 +874,11 @@ export default function RolloverDashboard() {
                           }
                           title={
                             row.issues.join("; ") ||
-                            "Valid synthetic inputs; not verified NSE data"
+                            "Validated NSE source inputs"
                           }
                         >
                           {row.status === "COMPLETE"
-                            ? "Demo complete"
+                            ? "Source validated"
                             : "Needs review"}
                         </span>
                       </td>
@@ -919,9 +996,7 @@ export default function RolloverDashboard() {
                       {r.values.map((v) => (
                         <td
                           key={v.month}
-                          title={
-                            v[matrixMetric].reason ?? "Synthetic observation"
-                          }
+                          title={v[matrixMetric].reason ?? "Source observation"}
                         >
                           {percentage(v[matrixMetric].value)}
                         </td>
@@ -948,20 +1023,51 @@ export default function RolloverDashboard() {
         )}
         {view === "sources" && (
           <section className="roll-source-status">
-            <h3>Fixture mode · real import and automation disabled</h3>
+            <h3>NSE downloads & source provenance</h3>
             <p>
-              Calendar: synthetic sessions and expiry dates. No official holiday
-              calendar has been verified. No last verified NSE month exists.
+              Calendar: NSE 2026 FO and CM holiday circulars, with actual
+              contract expiry validation. Snapshot policy: final trading session
+              before expiry.
             </p>
             <p>
-              Fixture timestamp:{" "}
-              {data?.selected.lastSync ?? "No report available"}. There is no
-              running NSE download or monthly scheduler.
+              Last report download: {data?.selected.lastSync ?? "Not available"}
+              . Downloads run on startup and retry every six hours. All source
+              hashes and normalized records persist in the database.
             </p>
             <p>
-              Next stages require verified UDiFF headers, authorized source
-              access, safe manual ZIP upload, persisted hashes and monitored
-              idempotent jobs.
+              Sources:{" "}
+              <a
+                href="https://www.nseindia.com/all-reports-derivatives"
+                target="_blank"
+                rel="noreferrer"
+              >
+                NSE F&O reports
+              </a>{" "}
+              ·{" "}
+              <a
+                href="https://www.nseindia.com/all-reports"
+                target="_blank"
+                rel="noreferrer"
+              >
+                NSE cash reports
+              </a>
+              . A failed month remains unavailable; earlier reports are never
+              relabelled.
+            </p>
+            <p>
+              Sectors:{" "}
+              {sectorSource ? (
+                <>
+                  <a href={sectorSource.url} target="_blank" rel="noreferrer">
+                    {sectorSource.reference}
+                  </a>{" "}
+                  · {sectorSource.count} scrips · fetched{" "}
+                  {sectorSource.fetchedAt}. The current classification is
+                  applied to every month.
+                </>
+              ) : (
+                "NSE industry list not downloaded yet; all scrips are Unclassified."
+              )}
             </p>
             <div className="roll-scroll">
               <table>
@@ -979,7 +1085,9 @@ export default function RolloverDashboard() {
                       <td>{monthName(m.month)}</td>
                       <td>{m.snapshotDate}</td>
                       <td>{m.actualExpiry}</td>
-                      <td title={m.issues.join("; ")}>{m.status} · DEMO</td>
+                      <td title={m.issues.join("; ")}>
+                        {m.status} · {m.evidence}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

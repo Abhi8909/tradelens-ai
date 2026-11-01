@@ -1,4 +1,65 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createRolloverRoutes } from "../../apps/api/src/rollovers/routes.ts";
+import { FixtureBhavcopyProvider } from "../../apps/api/tests/fixtures/rolloverFixture.ts";
 import { test, expect } from "@playwright/test";
+// Only browser-test transports serve fictional inputs. Production has no fixture provider.
+const handler = createRolloverRoutes(new FixtureBhavcopyProvider());
+function fixtureResponse(url: URL) {
+  let status = 200;
+  let headers: Record<string, string> = {};
+  let body = "";
+  handler(
+    { method: "GET" } as IncomingMessage,
+    {
+      writeHead: (code: number, h: Record<string, string>) => {
+        status = code;
+        headers = h;
+      },
+      end: (value: string) => {
+        body = value;
+      },
+    } as unknown as ServerResponse,
+    url,
+  );
+  return { status, headers, body };
+}
+test.beforeEach(async ({ page }, info) => {
+  if (info.title.includes("no demo fallback")) return;
+  await page.route("**/api/rollovers**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/status")) {
+      await route.fulfill({
+        json: {
+          configured: true,
+          status: {
+            running: false,
+            completed: 7,
+            total: 7,
+            currentMonth: null,
+            errors: [],
+          },
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/refresh")) {
+      await route.fulfill({
+        status: 202,
+        json: {
+          status: {
+            running: false,
+            completed: 7,
+            total: 7,
+            currentMonth: null,
+            errors: [],
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill(fixtureResponse(url));
+  });
+});
 test("rollover dashboard opens directly, filters, sorts, exports and preserves method labels", async ({
   page,
 }) => {
@@ -7,10 +68,10 @@ test("rollover dashboard opens directly, filters, sorts, exports and preserves m
     page.getByRole("heading", { name: "Futures rollover", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("DEMO · SYNTHETIC DATA", { exact: true }),
+    page.getByText("NSE · HISTORICAL REPORTS", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".roll-stock-table tbody tr")).toHaveCount(6);
-  await expect(page.getByLabel("Rollover expiry month")).toHaveValue("2026-09");
+  await expect(page.getByLabel("Rollover expiry month")).toHaveValue("2026-10");
   await page.getByLabel("Find rollover symbol").fill("ALPHA");
   await expect(page.locator(".roll-stock-table tbody tr")).toHaveCount(1);
   await page.getByRole("button", { name: "All metrics", exact: true }).click();
@@ -23,11 +84,15 @@ test("rollover dashboard opens directly, filters, sorts, exports and preserves m
   await page
     .getByRole("button", { name: "Rollover % ↕", exact: true })
     .click();
-  const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download CSV" }).click();
-  expect((await download).suggestedFilename()).toBe(
-    "rollovers-DEMO-2026-09.csv",
+  // Download navigations bypass page.route, so check the exact export URL against the fixture handler.
+  const href = await page
+    .getByRole("link", { name: "Download CSV" })
+    .getAttribute("href");
+  const exported = fixtureResponse(new URL(href!, "http://127.0.0.1"));
+  expect(exported.headers["content-disposition"]).toBe(
+    'attachment; filename="rollovers-DEMO-2026-10.csv"',
   );
+  expect(exported.body.split("\n").length).toBeGreaterThan(1);
   await page.getByRole("button", { name: "DEMO-ALPHA", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(
@@ -73,7 +138,7 @@ test("older months, incomplete rows, matrix gaps and source milestones remain vi
   await page.getByRole("tab", { name: "Source status", exact: true }).click();
   await expect(
     page.getByRole("heading", {
-      name: "Fixture mode · real import and automation disabled",
+      name: "NSE downloads & source provenance",
     }),
   ).toBeVisible();
   await page.getByLabel("Rollover expiry month").selectOption("2026-11");
@@ -112,7 +177,7 @@ test("rollover API errors are shown with a working retry", async ({ page }) => {
         contentType: "application/json",
         body: JSON.stringify({ error: "Synthetic source unavailable" }),
       });
-    else await route.continue();
+    else await route.fallback();
   });
   await page.goto("/rollovers");
   await expect(page.getByRole("alert")).toContainText(
@@ -121,4 +186,16 @@ test("rollover API errors are shown with a working retry", async ({ page }) => {
   fail = false;
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.locator(".roll-stock-table tbody tr")).toHaveCount(6);
+});
+
+test("no demo fallback when no verified reports are stored", async ({
+  page,
+}) => {
+  await page.goto("/rollovers");
+  await expect(
+    page.getByText("NSE · HISTORICAL REPORTS", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".roll-stock-table tbody tr")).toHaveCount(0);
+  await expect(page.locator(".roll-warning")).toContainText("MISSING");
+  await expect(page.getByText("DEMO-ALPHA", { exact: true })).toHaveCount(0);
 });
