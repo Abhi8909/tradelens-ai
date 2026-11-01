@@ -45,11 +45,19 @@ Open **MTF Tracker** to start immediately; no feature-specific login is required
 
 Portfolios are stored in an encrypted database, with an automatic workspace identified by a persistent browser cookie. Existing signed-in sessions retain their portfolios. Clearing cookies or switching browsers creates a separate workspace; app-wide login/signup will be added later. Local databases and generated keys live in ignored `.data/`; preserve both. Hosted deployments require PostgreSQL, HTTPS and a stable encryption key. Kite snapshots require review before creating lots and never place broker orders. CSV import is not part of the current UI.
 
-## Futures rollover (synthetic preview)
+## NSE futures rollover
 
-Open **Futures rollover** in the sidebar or visit **/rollovers**. Explore older months, rollover and spread calculations, sector summaries, a six-month matrix, per-symbol charts and CSV reports. Tooltips explain formulas and missing values.
+Open **Futures rollover** or **/rollovers**. The API downloads official NSE final UDiFF F&O and cash reports for six completed monthly snapshots, plus one prior month for comparisons. It validates matching dates, exact contract expiries, schema and OI units, then calculates rollover %, futures–spot basis, true next–near spread, MoM changes and historical averages. No demo records are served.
 
-This stage uses fictional fixtures only. The expiry calendar is synthetic, incomplete months remain visible, and no values are presented as verified NSE data. Futures–spot basis and next–near roll spread are separate metrics. Real-data ZIP uploads, automated downloads, persistence and monthly scheduling are not enabled yet; these require verified UDiFF formats and permitted source access.
+Normalized reports, SHA-256 hashes, source URLs, row diagnostics and monthly results persist in the configured application database. Downloads start when the API starts and retry every six hours; **Refresh NSE reports** runs another backfill. To populate before opening the app:
+
+```bash
+npm run rollovers:sync
+```
+
+Set `ROLLOVER_AUTO_SYNC=false` to disable background fetching. Use your existing database environment variables for the CLI as well as the server; root .env files require explicit loading. Report access failures remain visible in Source status and never fall back to fabricated data.
+
+These are historical final reports, not live ticks. The approved calendar currently covers 2026 and requires an update for later years. Scrips with ambiguous adjusted expiries or missing contracts remain under review and leave aggregate calculations. Sectors come from NSE's current Nifty 500 constituent list (Industry column), refreshed weekly and applied to every month; scrips outside it are Unclassified. Months already imported from final reports are not re-downloaded unless you press refresh. Spot MoM uses unadjusted cash closes. Check NSE data-use permissions before public redistribution; raw archives are not committed.
 
 ## Checks
 

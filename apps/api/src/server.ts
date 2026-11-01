@@ -1,3 +1,4 @@
+import { NseBhavcopyProvider } from './rollovers/nse.ts';
 import { storeFromEnv } from './mtf/store.ts';
 import { MtfService } from './mtf/service.ts';
 import { kiteFromEnv } from './mtf/kite.ts';
@@ -19,13 +20,19 @@ if (process.env.NODE_ENV === 'production' && !process.env.MTF_APP_ORIGIN?.starts
 const store = await storeFromEnv(process.env);
 const quotes = mtfQuoteFeedFromEnv(process.env);
 const mtf = new MtfService({ store, origin: process.env.MTF_APP_ORIGIN, production: process.env.NODE_ENV === 'production', allowRegistration: process.env.MTF_ALLOW_REGISTRATION === 'true' || process.env.NODE_ENV !== 'production', kite: kiteFromEnv(process.env), quotes });
+const nseRollovers = new NseBhavcopyProvider({ sql:store.sql });
+await nseRollovers.initialize();
+const syncRollovers = () => { void nseRollovers.sync().catch(() => console.error('NSE rollover sync unavailable; see source status')); };
+const autoSyncRollovers = process.env.ROLLOVER_AUTO_SYNC !== 'false';
+if(autoSyncRollovers)syncRollovers();
+const rolloverTimer = setInterval(() => { if(autoSyncRollovers)syncRollovers(); }, 6*60*60*1000); rolloverTimer.unref();
 const stopSnapshots = mtf.startSnapshots();
-const server = createApp(provider, { ...securityFromEnv(process.env), research: researchProviderFromEnv(process.env), mtfQuoteFeed: quotes, mtf });
+const server = createApp(provider, { ...securityFromEnv(process.env), research: researchProviderFromEnv(process.env), mtfQuoteFeed: quotes, mtf, nseRollovers, rolloverOrigin:process.env.MTF_APP_ORIGIN });
 server.requestTimeout = 15_000;
 server.headersTimeout = 10_000;
 server.keepAliveTimeout = 5_000;
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => {
-  stopSnapshots(); server.close(() => { void mtf.calculations.close().then(() => store.close()).finally(() => process.exit(0)); });
+  clearInterval(rolloverTimer); stopSnapshots(); server.close(() => { void mtf.calculations.close().then(() => store.close()).finally(() => process.exit(0)); });
   setTimeout(() => process.exit(1), 10_000).unref();
 });
 server.listen(port, process.env.API_HOST ?? '127.0.0.1', () => {

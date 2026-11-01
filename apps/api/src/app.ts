@@ -1,3 +1,4 @@
+import { NseBhavcopyProvider } from './rollovers/nse.ts';
 import { createRolloverRoutes } from './rollovers/routes.ts';
 import type { BhavcopyProvider } from './rollovers/provider.ts';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -52,15 +53,25 @@ function numberInRange(raw: string | null, fallback: number, min: number, max: n
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
-export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed; mtf?: MtfService; rolloverProvider?: BhavcopyProvider } = {}) {
+export function createApp(provider: MarketDataProvider = createDemoProvider(), options: ApiOptions & { research?: ResearchProvider; mtfQuoteFeed?: MtfQuoteFeed; mtf?: MtfService; rolloverProvider?: BhavcopyProvider; nseRollovers?: NseBhavcopyProvider; rolloverOrigin?: string } = {}) {
   const source = SOURCES[provider.info.kind];
   const guard = createGuard(options);
-  const rollovers = createRolloverRoutes(options.rolloverProvider);
+  const rollovers = createRolloverRoutes(options.nseRollovers ?? options.rolloverProvider);
   return createServer(async (request, response) => {
     try {
       if (!guard(request, response)) return;
       const url = new URL(request.url ?? '/', 'http://localhost');
       const path = url.pathname;
+      if (path === '/api/rollovers/status' && request.method === 'GET') { const sectors=options.nseRollovers?.sectors; return send(response,200,{status:options.nseRollovers?.status ?? null,configured:!!options.nseRollovers,sectors:sectors?{reference:sectors.reference,url:sectors.url,fetchedAt:sectors.fetchedAt,count:Object.keys(sectors.sectors).length}:null}); }
+      if (path === '/api/rollovers/refresh' && request.method === 'POST') {
+        let origin:URL;
+        try { origin=new URL(String(request.headers.origin)); } catch { return send(response,403,{error:'Same-origin request required'}); }
+        const configured=options.rolloverOrigin?.trim();
+        if(origin.origin!==(configured || 'http://'+request.headers.host) || !configured&&!['localhost','127.0.0.1','[::1]'].includes(origin.hostname)) return send(response,403,{error:'Origin not allowed'});
+        if(!options.nseRollovers)return send(response,503,{error:'NSE download service is not configured'});
+        void options.nseRollovers.sync(true).catch(()=>{});
+        return send(response,202,{status:options.nseRollovers.status});
+      }
       if (rollovers(request, response, url)) return;
       if (options.mtf && await options.mtf.handle(request, response, url)) return;
       if (request.method === 'POST' && path === '/api/mtf/quotes') {

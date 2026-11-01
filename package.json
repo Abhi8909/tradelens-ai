@@ -18,16 +18,20 @@
     "build": "npm run build --workspace @tradelens/web",
     "typecheck": "npm run typecheck --workspace @tradelens/web && tsc -p apps/api/tsconfig.json",
     "test:e2e": "playwright test",
-    "mtf:admin": "node --experimental-strip-types scripts/mtf-maintenance.ts"
+    "mtf:admin": "node --experimental-strip-types scripts/mtf-maintenance.ts",
+    "rollovers:sync": "node --experimental-strip-types scripts/rollover-sync.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.15.0",
     "@types/pg": "^8.23.1",
+    "@types/yauzl": "^3.4.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "csv-parse": "^7.0.3",
     "decimal.js": "^10.6.0",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "yauzl": "^3.4.0"
   }
 }

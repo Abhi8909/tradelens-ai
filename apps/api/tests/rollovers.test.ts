@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createApp } from "../src/app.ts";
-import { FixtureBhavcopyProvider } from "../src/rollovers/provider.ts";
+import { FixtureBhavcopyProvider } from "./fixtures/rolloverFixture.ts";
 async function api(run: (base: string) => Promise<void>) {
-  const server = createApp();
+  const server = createApp(undefined, {
+    rolloverProvider: new FixtureBhavcopyProvider(),
+  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();

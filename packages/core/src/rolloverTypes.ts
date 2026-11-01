@@ -40,6 +40,9 @@ export type RolloverContract = {
   close: number | null;
   oi: number | null;
   oiUnit: "SHARES" | "CONTRACTS";
+  originalExpiry?: string;
+  instrumentId?: string;
+  marketLot?: number;
 };
 export type RolloverInput = {
   symbol: string;

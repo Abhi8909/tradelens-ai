@@ -9,7 +9,8 @@ import type {
   MetricKey,
   RolloverViewRow,
 } from "../../../../packages/core/src/rolloverTypes.ts";
-import { FixtureBhavcopyProvider, type BhavcopyProvider } from "./provider.ts";
+import type { BhavcopyProvider } from "./provider.ts";
+import { NseBhavcopyProvider } from "./nse.ts";
 const SORTS = [
   "symbol",
   "spot",
@@ -31,9 +32,8 @@ const SORTS = [
   "deltaPp",
 ] as const;
 export function createRolloverRoutes(
-  provider: BhavcopyProvider = new FixtureBhavcopyProvider(),
+  provider: BhavcopyProvider = new NseBhavcopyProvider(),
 ) {
-  const dataset = provider.load();
   return (
     request: IncomingMessage,
     response: ServerResponse,
@@ -50,9 +50,10 @@ export function createRolloverRoutes(
     };
     if (request.method !== "GET")
       return send(405, {
-        error: "This stage supports read-only synthetic rollover data",
+        error: "Use the refresh endpoint to download official NSE reports",
       });
     try {
+      const dataset = provider.load();
       const latest =
         dataset.months.filter((m) => m.status === "COMPLETE").at(-1)?.month ??
         null;
@@ -60,15 +61,21 @@ export function createRolloverRoutes(
         return send(200, {
           evidence: dataset.evidence,
           latestComplete: latest,
+          latestAvailable:
+            dataset.months.filter((m) => m.lastSync !== null).at(-1)?.month ??
+            null,
           months: dataset.months,
           calendarReference: dataset.calendarReference,
           capabilities: {
-            imports: false,
+            imports: true,
             scheduler: false,
-            verifiedNseData: false,
+            verifiedNseData: dataset.rows.some(
+              (row) => row.evidence === "VERIFIED",
+            ),
           },
         });
-      const month = url.searchParams.get("month") ?? latest;
+      const month =
+        url.searchParams.get("month") ?? latest ?? dataset.months.at(-1)?.month;
       if (!month || !dataset.months.some((m) => m.month === month))
         return send(400, { error: "Select an available month" });
       monthOffset(month, 0);
@@ -178,7 +185,7 @@ export function createRolloverRoutes(
       if (url.pathname === "/api/rollovers/export") {
         response.writeHead(200, {
           "content-type": "text/csv; charset=utf-8",
-          "content-disposition": `attachment; filename="rollovers-DEMO-${month}.csv"`,
+          "content-disposition": `attachment; filename="rollovers-${dataset.evidence}-${month}.csv"`,
           "cache-control": "no-store",
         });
         response.end(rolloverCsv(filtered));
@@ -200,27 +207,25 @@ export function createRolloverRoutes(
           month: m,
           ...aggregateRollovers(dataset.rows.filter((r) => r.month === m)),
         })),
-        matrix: filtered
-          .slice((page - 1) * 25, page * 25)
-          .map((r) => ({
-            symbol: r.symbol,
-            average: r.average,
-            values: window.map((m) => ({
-              month: m,
-              rollover: dataset.rows.find(
-                (h) => h.symbol === r.symbol && h.month === m,
-              )?.metrics.rolloverPct ?? {
-                value: null,
-                reason: "Monthly observation unavailable",
-              },
-              spread: dataset.rows.find(
-                (h) => h.symbol === r.symbol && h.month === m,
-              )?.metrics.spreadPct ?? {
-                value: null,
-                reason: "Monthly observation unavailable",
-              },
-            })),
+        matrix: filtered.slice((page - 1) * 25, page * 25).map((r) => ({
+          symbol: r.symbol,
+          average: r.average,
+          values: window.map((m) => ({
+            month: m,
+            rollover: dataset.rows.find(
+              (h) => h.symbol === r.symbol && h.month === m,
+            )?.metrics.rolloverPct ?? {
+              value: null,
+              reason: "Monthly observation unavailable",
+            },
+            spread: dataset.rows.find(
+              (h) => h.symbol === r.symbol && h.month === m,
+            )?.metrics.spreadPct ?? {
+              value: null,
+              reason: "Monthly observation unavailable",
+            },
           })),
+        })),
       });
     } catch (error) {
       return send(400, {
