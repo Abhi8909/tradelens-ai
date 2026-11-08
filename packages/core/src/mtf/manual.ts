@@ -4,6 +4,8 @@ import { MARKET_SYMBOL } from '../marketData.ts';
 export type ManualMtfPosition = {
   id: string; symbol: string; boughtDate: string; quantity: number; buyPriceInr: string;
   interestPerDayInr: string; otherChargesInr: string; exitDate: string | null;
+  /** Per-share sale price for a full exit. Absent on older records, which stay date-only exits. */
+  exitPriceInr?: string | null;
   manualPrice: { priceInr: string; at: string } | null;
 };
 export function validateManualMtfPosition(position: ManualMtfPosition, asOfDate: string): void {
@@ -14,6 +16,7 @@ export function validateManualMtfPosition(position: ManualMtfPosition, asOfDate:
   amount(position.interestPerDayInr); amount(position.otherChargesInr);
   requireMtf(position.boughtDate <= asOfDate, 'INVALID_CHRONOLOGY');
   if (position.exitDate !== null) { calendarDate(position.exitDate); requireMtf(position.exitDate >= position.boughtDate && position.exitDate <= asOfDate, 'INVALID_CHRONOLOGY'); }
+  if (position.exitPriceInr != null) requireMtf(position.exitDate !== null && amount(position.exitPriceInr).gt(0));
   if (position.manualPrice !== null) {
     requireMtf(amount(position.manualPrice.priceInr).gt(0));
     requireMtf(typeof position.manualPrice.at === 'string' && Number.isFinite(Date.parse(position.manualPrice.at)));

@@ -21,7 +21,7 @@ export default function ResearchAssistant({ stocks }: { stocks: StockSummary[] }
     } catch (e) { setError(e instanceof Error ? e.message : 'Research unavailable'); }
     finally { setBusy(false); }
   }
-  return <div className="panel lab-form"><h3>Grounded research assistant</h3>
+  return <div className="panel lab-form"><div className="section-head"><div><p className="eyebrow">THESIS RESEARCH</p><h3>Grounded research assistant</h3></div></div>
     <p className="muted">Review descriptive price evidence, or argue against a directional thesis. The default provider is an offline mock. This does not retrieve filings or news.</p>
     <p className="muted">Submitting sends your hypothesis to the API and its configured research provider. Reports are not saved on the server.</p>
     <form onSubmit={submit}><div className="form-grid">
@@ -31,14 +31,14 @@ export default function ResearchAssistant({ stocks }: { stocks: StockSummary[] }
       <label className="form-field">Research action<select value={action} onChange={e => setAction(e.target.value)}><option value="review">Review evidence</option><option value="argue-against">Argue against my thesis</option></select></label>
     </div><button className="primary" disabled={busy || !stocks.length}>{busy ? 'Retrieving evidence…' : 'Research thesis'}</button></form>
     {error && <p role="alert" className="error">{error}</p>}
-    {report && <section aria-live="polite"><h4>Evidence for {report.input.symbol} · {report.provider}</h4><p>Hypothesis reviewed: {report.input.thesis} ({report.input.direction})</p><p>{report.limitation}</p>
+    {report && <section className="research-report" aria-live="polite"><h4>Evidence for {report.input.symbol} · {report.provider}</h4><p className="research-thesis">Hypothesis reviewed: {report.input.thesis} ({report.input.direction})</p><p>{report.limitation}</p>
       {report.warnings.map(w => <p key={w}>{w}</p>)}
       {report.contradictory && <p>Trend and momentum disagree. Both observations are retained in the evidence record.</p>}
       {!report.citations.length && <p>No qualifying evidence found. This does not confirm the thesis.</p>}
       {report.citations.map(c => <article key={c.id}><p>{c.statement}</p><small>Citation: {c.id} · calculation: {c.tool}</small></article>)}
-      <p>Source: {report.provenance.providerId} · {report.provenance.kind} · {report.provenance.exchange} · License: {report.provenance.license}</p>
-      <p>Observed: {report.provenance.observedAt ?? 'unknown'} · Ingested: {report.provenance.ingestedAt}</p>
-      <p style={{ overflowWrap: 'anywhere' }}>Input data version (SHA-256): {report.version}</p>
+      <p className="research-provenance">Source: {report.provenance.providerId} · {report.provenance.kind} · {report.provenance.exchange} · License: {report.provenance.license}</p>
+      <p className="research-provenance">Observed: {report.provenance.observedAt ?? 'unknown'} · Ingested: {report.provenance.ingestedAt}</p>
+      <p className="research-provenance">Input data version (SHA-256): {report.version}</p>
     </section>}
   </div>;
 }

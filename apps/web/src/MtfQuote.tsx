@@ -34,8 +34,8 @@ function QuoteTimestamp({ at, source }: { at: string; source: string }) {
     </div>, document.body)}
   </>;
 }
-export function PriceQuote({ price, source, state, at, closed }: { price: string | null; source: string; state: QuoteState; at: string | null; closed: boolean }) {
-  if (closed) return <div className="mtf-quote mtf-quote-exited"><strong>—</strong><span>Exited position</span></div>;
+export function PriceQuote({ price, source, state, at, closed, sold = null }: { price: string | null; source: string; state: QuoteState; at: string | null; closed: boolean; sold?: { priceInr: string; date: string | null } | null }) {
+  if (closed) return <div className="mtf-quote mtf-quote-exited">{sold ? <><strong className="mtf-quote-value">{inr(sold.priceInr)}</strong><span>Sold{sold.date ? ` ${sold.date}` : ''}</span></> : <><strong>—</strong><span>Exited position</span></>}</div>;
   const label = source.startsWith('NSE official MCP') ? 'NSE' : state === 'MANUAL' ? 'Manual entry' : state === 'UNAVAILABLE' ? 'No quote' : 'Market feed';
   const status = { LIVE: 'Live', DELAYED: 'Delayed', EOD: 'LTP', MANUAL: 'Unverified', STALE: 'Stale', UNAVAILABLE: 'Unavailable' }[state];
   return <div className="mtf-quote">
