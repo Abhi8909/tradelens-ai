@@ -1,5 +1,6 @@
 import { D, addDays, amount, calendarDate, instant, istDay, money, requireMtf, rounding } from './decimal.ts';
 import { calculateMtfLot } from './ledger.ts';
+import { estimateMtfSellFees } from './fees.ts';
 import { summarizeMtfPortfolio } from './portfolio.ts';
 import { validateManualMtfPosition, type ManualMtfPosition } from './manual.ts';
 import type { MtfCharge, MtfEvent, MtfFeeSchedule, MtfInterestPolicy, MtfLot, MtfScope, MtfSnapshot, MtfMetrics } from './types.ts';
@@ -42,9 +43,15 @@ export function positionLot(document: PortfolioDocument, scope: MtfScope): { lot
     buy: { id: `buy:${document.id}`, at, quantity: p.quantity, priceInr: p.buyPriceInr, fundedInr: document.fundedInr, source },
     events: structuredClone(document.events), charges: [{ ...scope, id: `entry:${document.id}`, lotId: document.id, at, source, kind: 'OTHER', effectiveDate: p.boughtDate, amountInr: amount(p.otherChargesInr).toFixed(2), evidence: 'ESTIMATED', exitId: null, refundOf: null }, ...structuredClone(document.charges)] };
   if (p.exitDate && !lot.events.some(e => e.id === `exit:${document.id}`)) {
+    const exit = { ...scope, id: `exit:${document.id}`, lotId: document.id, at: `${p.exitDate}T00:00:01+05:30`, source, quantity: p.quantity, principalRepaidInr: document.fundedInr };
+    if (p.exitPriceInr) {
+      lot.events.push({ ...exit, kind: 'SELL', priceInr: p.exitPriceInr });
+      // The user's sale-cost estimate is charged on the exit so final P/L is net of it.
+      const fees = document.sellFees ? amount(estimateMtfSellFees(p.exitPriceInr, p.quantity, document.sellFees, p.exitDate).totalInr) : null;
+      if (fees?.gt(0)) lot.charges.push({ ...scope, id: `exit-fees:${document.id}`, lotId: document.id, at: exit.at, source, kind: 'OTHER', effectiveDate: p.exitDate, amountInr: fees.toFixed(2), evidence: 'ESTIMATED', exitId: exit.id, refundOf: null });
+    }
     // Legacy date-only exits retain unknown realized proceeds; never invent a zero sale.
-    lot.events.push({ ...scope, id: `exit:${document.id}`, lotId: document.id, at: `${p.exitDate}T00:00:01+05:30`, source,
-      kind: 'EXIT_UNPRICED', quantity: p.quantity, principalRepaidInr: document.fundedInr });
+    else lot.events.push({ ...exit, kind: 'EXIT_UNPRICED' });
   }
   const changes = [...(document.rateChanges ?? [])].sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom));
   const rates = document.dailyFraction === null ? [] : [{ id: `rate:${document.id}`, effectiveFrom: p.boughtDate, effectiveTo: null as string | null, dailyFraction: document.dailyFraction, source }];

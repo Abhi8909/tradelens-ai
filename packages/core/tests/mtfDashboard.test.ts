@@ -34,3 +34,16 @@ test('hold projections never turn a stale observation into a fresh market valuat
   assert.equal(derivePortfolioPosition(document,scope,now,stale).quoteState,'STALE');
   assert.ok(projectPosition(document,scope,now,stale).every(s=>s.pnlInr===null));
 });
+test('priced exits book final P/L net of interest, entry charges and estimated sale costs',()=>{
+  const exit={...input,position:{...input.position,exitDate:'2026-01-11',exitPriceInr:'120'}};
+  const closed=derivePortfolioPosition(createPortfolioDocument(exit,scope,'synthetic',now),scope,now,null);
+  // 100 × (120 − 100) − 10 days × 2.40 interest − 20 entry charges
+  assert.equal(closed.status,'CLOSED_SOLD');assert.equal(closed.metrics!.realizedPnlInr,'1956.00');assert.equal(closed.metrics!.quantityOpen,0);
+  const fees={id:'synthetic-fees',effectiveFrom:'2026-01-01',effectiveTo:null,source:{kind:'MANUAL_UNVERIFIED',reference:'Synthetic estimate'},roundingMode:'HALF_UP',lines:[{id:'sale',kind:'OTHER',fixedInr:'10',turnoverFraction:'0.001',capInr:null}]};
+  const net=derivePortfolioPosition(createPortfolioDocument({...exit,sellFees:fees},scope,'synthetic',now),scope,now,null);
+  assert.equal(net.metrics!.realizedPnlInr,'1934.00');
+  const loss=derivePortfolioPosition(createPortfolioDocument({...input,fundedInr:'6000',dailyFraction:'0.0004',position:{...input.position,exitDate:'2026-01-11',exitPriceInr:'95'}},scope,'synthetic',now),scope,now,null);
+  assert.equal(loss.metrics!.fundedOutstandingInr,'0.00');assert.equal(loss.metrics!.realizedPnlInr,'-544.00');
+  assert.throws(()=>createPortfolioDocument({...input,position:{...input.position,exitPriceInr:'120'}},scope,'synthetic',now));
+  assert.throws(()=>createPortfolioDocument({...exit,position:{...exit.position,exitPriceInr:'0'}},scope,'synthetic',now));
+});
