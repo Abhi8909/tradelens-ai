@@ -11,6 +11,16 @@ type Summary = { openLots: number; quoteCoverage: { valued: number; required: nu
 const emptyForm = { symbol: '', boughtDate: '', quantity: '', buyPriceInr: '', interestPerDayInr: '', otherChargesInr: '0', currentPrice: '', exitDate: '', exitPriceInr: '', fundedInr: '', dailyRatePct: '', sellFixed: '', sellPct: '', reason: '', isin: '', startOffset: '1', includeExit: 'yes', rounding: 'DAILY:HALF_UP' };
 const pct = (v: string | null | undefined) => v == null ? '—' : `${new D(v).gt(0) ? '+' : ''}${v}%`;
 const color = (v: string | null | undefined) => v == null ? '' : new D(v).lt(0) ? 'down' : new D(v).gt(0) ? 'up' : '';
+const signed = (v: string | null) => v == null ? '—' : `${new D(v).gt(0) ? '+' : ''}${inr(v)}`;
+const cost = (v: string | null) => v == null ? '—' : new D(v).gt(0) ? `−${inr(v)}` : inr('0');
+/** One-line reading of how costs changed the outcome; null when there is nothing worth saying. */
+function costInsight(gain: string, costs: string, final: string): { text: string; warn: boolean } | null {
+  const g = new D(gain), c = new D(costs);
+  if (!c.gt(0)) return null;
+  if (g.gt(0) && new D(final).lt(0)) return { text: 'Costs turned a price gain into a loss', warn: true };
+  if (g.gt(0)) return { text: `Costs took ${c.div(g).mul(100).toFixed(0)}% of the price gain`, warn: c.div(g).gte(0.5) };
+  return { text: `Costs added ${inr(c.toFixed(2))} to the price loss`, warn: false };
+}
 const statusLabel = (s: string) => ({ OPEN_MTF: 'OPEN', PARTIALLY_SOLD: 'PARTIAL', CLOSED_SOLD: 'EXITED', CONVERTED_TO_DELIVERY: 'CONVERTED', NEEDS_REVIEW: 'REVIEW' }[s] ?? s);
 export default function MtfTracker({ active }: { active: boolean }) {
   const draftId = useRef(crypto.randomUUID());
@@ -90,8 +100,12 @@ export default function MtfTracker({ active }: { active: boolean }) {
   if (!user) return <section className="panel mtf-auth"><p role="alert">{error || 'Could not open your MTF workspace.'}</p><button className="mtf-secondary" onClick={() => { setError(''); setReady(false); }}>Retry</button></section>;
   const closedFinal = rows.filter(r => r.snapshot.status === 'CLOSED_SOLD').reduce((acc, r) => {
     const value = r.document.events.some(e => e.kind === 'SELL') || r.document.position.exitPriceInr ? r.snapshot.metrics?.realizedPnlInr ?? null : null;
-    return { count: acc.count + 1, unpriced: acc.unpriced + (value === null ? 1 : 0), total: value === null ? acc.total : new D(acc.total).add(value).toFixed(2) };
-  }, { count: 0, unpriced: 0, total: '0.00' });
+    const gain = value === null ? null : priceGain(r);
+    if (value === null || gain === null) return { ...acc, count: acc.count + 1, unpriced: acc.unpriced + 1 };
+    return { count: acc.count + 1, unpriced: acc.unpriced, total: new D(acc.total).add(value).toFixed(2), gain: new D(acc.gain).add(gain).toFixed(2) };
+  }, { count: 0, unpriced: 0, total: '0.00', gain: '0.00' });
+  const closedCosts = new D(closedFinal.gain).sub(closedFinal.total).toFixed(2);
+  const closedInsight = closedFinal.count > closedFinal.unpriced ? costInsight(closedFinal.gain, closedCosts, closedFinal.total) : null;
   const cards = [ ['Open invested amount', summary?.remainingPurchaseCostInr, Wallet], ['Interest till now', summary?.openInterestInr, CalendarDays], ['Total charges', summary?.openIncurredCostsInr, Receipt], ['Open net P/L', summary?.costAdjustedUnrealizedPnlInr, TrendingUp], ['Market value', summary?.marketValueInr, TrendingUp], ['Broker funding', summary?.fundedOutstandingInr, Database], ['Own contribution', summary?.initialOwnFundsInr, Wallet], ['Daily interest burn', summary?.dailyInterestInr, CalendarDays] ];
   const definitions: [string, string][] = [['bought','Bought / days'],['quantity','Holding'],['buy','Buy price'],['adjusted','Adjusted buy price'],['price', tab === 'closed' ? 'Sold price' : 'Current price'],['pnl', ['closed','converted'].includes(tab)?'Final P/L':'Net P/L'],['pct','P/L %'],['invested','Invested'],['interest','Interest till now'],['charges','Financing & charges'],['funding','Funded balance'],['gross','Gross P/L'],['breakeven','Exit break-even'],['net','Net liquidation estimate']];
   const headerHints: Record<string, string> = { adjusted: 'incl. interest & charges', price: tab === 'closed' ? 'per share' : 'latest quote', pnl: ['closed','converted'].includes(tab) ? 'after all costs' : 'after interest & charges', charges: 'interest + other costs' };
@@ -111,6 +125,16 @@ export default function MtfTracker({ active }: { active: boolean }) {
     // Several sales are shown at their quantity-weighted average price.
     const shares = sales.reduce((n, e) => n + e.quantity, 0);
     return { priceInr: sales.reduce((v, e) => v.add(new D(e.priceInr).mul(e.quantity)), new D(0)).div(shares).toFixed(2), date: istDay(sales.at(-1)!.at) };
+  }
+  /** Profit from the price move alone: sale (or market) value minus purchase cost, before interest and charges. */
+  function priceGain(row: DashboardRow) {
+    const m = row.snapshot.metrics; if (!m) return null;
+    if (['OPEN_MTF','PARTIALLY_SOLD'].includes(row.snapshot.status)) return m.grossUnrealizedPnlInr;
+    if (row.snapshot.status !== 'CLOSED_SOLD') return null;
+    const p = row.document.position; const sales = row.document.events.filter(e => e.kind === 'SELL');
+    const proceeds = p.exitPriceInr ? new D(p.exitPriceInr).mul(p.quantity).toDecimalPlaces(2)
+      : sales.length ? sales.reduce((v, e) => v.add(new D(e.priceInr).mul(e.quantity).toDecimalPlaces(2)), new D(0)) : null;
+    return proceeds === null ? null : proceeds.sub(m.grossPurchaseNotionalInr).toFixed(2);
   }
   function positionIdentity(row: DashboardRow) {
     const { document, snapshot } = row;
@@ -143,7 +167,17 @@ export default function MtfTracker({ active }: { active: boolean }) {
       const returnPct = rowPct(row);
       // Say why P/L is missing instead of showing empty placeholders.
       const missing = pnl != null ? null : !closed ? 'Needs a current price' : row.snapshot.status === 'CONVERTED_TO_DELIVERY' ? 'Moved to delivery, not sold' : 'Sold price not recorded · Edit to add';
-      return <div className="mtf-row-stack mtf-return-stack"><strong className={color(pnl)}>{inr(pnl ?? null)}</strong>{returnPct !== null && <span className={`mtf-return-pill ${color(returnPct)}`}>{pct(returnPct)}</span>}{missing ? <small className={`mtf-row-hint${closed ? '' : ' warn'}`}>{missing}</small> : closed && <small className={color(pnl)}>{new D(pnl!).lt(0) ? 'Final loss' : 'Final profit'} after all costs</small>}</div>;
+      const gain = pnl == null ? null : priceGain(row);
+      const costs = gain === null ? null : new D(gain).sub(pnl!).toFixed(2);
+      const insight = gain !== null && costs !== null ? costInsight(gain, costs, pnl!) : null;
+      return <div className="mtf-pnl">
+        <div className="mtf-row-stack mtf-return-stack"><strong className={color(pnl)}>{signed(pnl ?? null)}</strong>{returnPct !== null && <span className={`mtf-return-pill ${color(returnPct)}`}>{pct(returnPct)}</span>}</div>
+        {missing ? <small className={`mtf-row-hint${closed ? '' : ' warn'}`}>{missing}</small> : gain !== null && <dl className="mtf-pnl-breakdown" aria-label="P/L breakdown">
+          <div><dt>{closed ? 'Price gain' : 'Price gain so far'}</dt><dd className={color(gain)}>{signed(gain)}</dd></div>
+          <div><dt>Interest & charges</dt><dd>{cost(costs)}</dd></div>
+        </dl>}
+        {insight && <small className={`mtf-pnl-insight${insight.warn ? ' warn' : ''}`}>{insight.text}</small>}
+      </div>;
     }
     if (key === 'charges') {
       const other = totalCharges != null && interest != null ? new D(totalCharges).sub(interest).toFixed(2) : null;
@@ -166,6 +200,12 @@ export default function MtfTracker({ active }: { active: boolean }) {
       ['symbol','Scrip symbol','text',true],['boughtDate','Bought date','date',true],['quantity','Quantity','number',true],['buyPriceInr','Buying price (₹ / share)','number',true],['interestPerDayInr','Interest per day (₹)','number',true],['otherChargesInr','Other charges (₹)','number',true],['currentPrice','Current price (₹, optional manual)','number',false], ...(editing ? [['exitDate','Exit date (optional)','date',false],['exitPriceInr','Sold price (₹ / share)','number',!!form.exitDate],['reason','Change reason','text',true]] : [])
     ] as [keyof typeof form,string,string,boolean][]).map(([key,label,type,required]) => <label key={key}>{label}<input id={key === 'exitPriceInr' ? 'mtf-exit-price' : undefined} required={required} type={type} step={type === 'number' ? key === 'quantity' ? '1' : '0.01' : undefined} min={type === 'number' ? key === 'quantity' ? '1' : '0' : undefined} max={type === 'date' ? today : undefined} value={form[key]} onChange={e => setForm(f => ({ ...f,[key]:e.target.value }))}/></label>)}</div><details><summary>Funding and sale-cost estimates (optional)</summary><p>Enter funded principal and daily rate together to calculate interest from funding. Leave both blank to retain your flat daily estimate.</p><div className="mtf-form-grid">{(['fundedInr','dailyRatePct','sellFixed','sellPct'] as const).map((key,i) => <label key={key}>{['Initial funded principal (₹)','Daily funding rate (%)','Estimated fixed sale costs (₹)','Estimated sale turnover charges (%)'][i]}<input type="number" min="0" step="0.0001" value={form[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))}/></label>)}<label>ISIN (optional)<input maxLength={12} value={form.isin} onChange={e=>setForm(f=>({...f,isin:e.target.value.toUpperCase()}))}/></label><label>Interest starts<select value={form.startOffset} onChange={e=>setForm(f=>({...f,startOffset:e.target.value}))}><option value="1">T+1 calendar day</option><option value="0">Purchase day</option></select></label><label>Exit-day interest<select value={form.includeExit} onChange={e=>setForm(f=>({...f,includeExit:e.target.value}))}><option value="yes">Include closing day</option><option value="no">Exclude repaid principal on closing day</option></select></label><label>Interest rounding<select value={form.rounding} onChange={e=>setForm(f=>({...f,rounding:e.target.value}))}>{['DAILY:HALF_UP','DAILY:HALF_EVEN','DAILY:DOWN','TOTAL:HALF_UP','TOTAL:HALF_EVEN','TOTAL:DOWN'].map(v=><option key={v} value={v}>{v.replace(':',' · ').replaceAll('_',' ')}</option>)}</select></label></div></details>{editing && form.exitDate && <p className="mtf-form-hint">Exiting all {form.quantity} shares. Final P/L = sold value − purchase cost − interest − charges{form.sellFixed || form.sellPct ? ' − estimated sale costs' : ''}.</p>}<p className="mtf-form-hint">Days are calendar days since purchase (purchase day = 0). Adjusted price = (remaining purchase cost + incurred costs) ÷ remaining shares.</p><div className="mtf-toolbar"><button className="primary" disabled={busy}>{editing ? 'Save changes' : 'Add position'}</button>{editing && <button type="button" className="mtf-secondary" onClick={() => { setEditing(null); setForm(emptyForm); }}>Cancel edit</button>}</div></form></section>}
     <section className="panel mtf-positions"><div className="mtf-position-header"><div className="mtf-tabs" role="tablist" aria-label="Position lifecycle">{[['open','Open'],['closed','Closed'],['converted','Converted'],['review','Needs review'],['all','All history']].map(([id,label]) => <button role="tab" aria-selected={tab===id} key={id} onClick={()=>setTab(id)}>{label}</button>)}</div><div className="mtf-position-tools"><label className="mtf-search"><Search size={16}/><input aria-label="Search positions" placeholder="Search scrip" value={search} onChange={e=>setSearch(e.target.value)}/></label><select aria-label="Sort positions" value={sort} onChange={e=>setSort(e.target.value)}><option value="symbol">Scrip A–Z</option><option value="pnl">Highest P/L</option><option value="interest">Highest accrued interest</option></select><details className="mtf-column-picker"><summary>Columns</summary>{definitions.map(([id,label])=><label key={id}><input type="checkbox" checked={columns.includes(id)} onChange={()=>setColumns(c=>c.includes(id)?c.filter(k=>k!==id):[...c,id])}/>{label}</label>)}</details></div></div>
+      {['closed','all'].includes(tab) && closedFinal.count > 0 && <section className="mtf-booked" aria-label="Closed position results">
+        <div><span>Price gain</span><strong className={color(closedFinal.gain)}>{signed(closedFinal.gain)}</strong><small>Sold value − bought value</small></div>
+        <div><span>Interest & charges</span><strong>{cost(closedCosts)}</strong><small>Funding interest, entry & sale costs</small></div>
+        <div className="mtf-booked-final"><span>Final P/L</span><strong className={color(closedFinal.total)}>{signed(closedFinal.total)}</strong><small>{closedFinal.count - closedFinal.unpriced} of {closedFinal.count} closed positions{closedFinal.unpriced ? ` · ${closedFinal.unpriced} need a sold price` : ''}</small></div>
+        {closedInsight && <p className={closedInsight.warn ? 'warn' : ''}>{closedInsight.text}</p>}
+      </section>}
       {!display.length ? <div className="mtf-empty"><Wallet size={32}/><h3>No positions in this view</h3><p>Add a scrip or change the search/status filter.</p></div> : <><div className="table-scroll mtf-desktop-table"><table className="mtf-position-table"><caption>Account-scoped estimates. Closed/converted records never enter open totals.</caption><thead><tr><th>Scrip / status</th>{definitions.filter(([id])=>columns.includes(id)).map(([id,label])=><th key={id}>{label}{headerHints[id] && <small className="mtf-th-hint">{headerHints[id]}</small>}</th>)}</tr></thead><tbody>{pageRows.map(row=><tr key={row.document.id} className={['CLOSED_SOLD','CONVERTED_TO_DELIVERY'].includes(row.snapshot.status)?'mtf-closed':''}><td>{positionIdentity(row)}</td>{definitions.filter(([id])=>columns.includes(id)).map(([id])=><td key={id} className={id==='adjusted'?'mtf-adjusted':id==='price'?'mtf-quote-cell':''}>{cell(row,id)}</td>)}</tr>)}</tbody></table></div><div className="mtf-mobile-cards">{pageRows.map(row=><article key={row.document.id} className={`mtf-mobile-position ${['CLOSED_SOLD','CONVERTED_TO_DELIVERY'].includes(row.snapshot.status)?'mtf-closed':''}`}><header>{positionIdentity(row)}</header><dl>{['quantity','adjusted','price','charges','pnl'].map(key=><div key={key}><dt>{definitions.find(([id])=>id===key)?.[1]}</dt><dd>{cell(row,key)}</dd></div>)}</dl></article>)}</div><div className="mtf-pagination"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Previous</button><span>{display.length} positions · page {page} of {Math.max(1,Math.ceil(display.length/50))}</span><button disabled={page*50>=display.length} onClick={()=>setPage(p=>p+1)}>Next</button></div></>}
     </section>
     <section className="panel mtf-editor"><h3>Cost burn & observed portfolio history</h3><div className="mtf-settings-grid"><div><p>Daily estimated financing burn by open lot</p>{rows.filter(r=>['OPEN_MTF','PARTIALLY_SOLD'].includes(r.snapshot.status)).map(r=>{const daily=dailyBurn(r.document,r.snapshot.metrics,asOfDay);return <div className="mtf-burn-row" key={r.document.id}><span>{r.document.position.symbol}</span><strong>{inr(daily)}/day</strong></div>;})}</div><div><p>Recorded daily snapshots · no fabricated pre-connection history</p>{history.length ? history.slice(-14).map((h,i)=><div className="mtf-burn-row" key={i}><time>{istDay(h.at)}</time><span className={color(h.summary.costAdjustedUnrealizedPnlInr)}>{inr(h.summary.costAdjustedUnrealizedPnlInr)}</span></div>) : <p>No snapshots yet. Refresh prices to record the first observation.</p>}</div></div></section>

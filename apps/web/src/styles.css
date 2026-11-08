@@ -113,3 +113,26 @@
 .mtf-position-table .mtf-row-stack small.mtf-row-hint.warn, .mtf-mobile-position .mtf-row-stack small.mtf-row-hint.warn { color:#e9c783; font-style:normal; }
 /* The sticky first cell keeps an older, more specific background; match the rest of a closed row. */
 .mtf-position-table tbody tr.mtf-closed td:first-child, .mtf-position-table tbody tr.mtf-closed:hover td { background:#1c2330; }
+.mtf-pnl { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:220px; }
+.mtf-pnl-breakdown { margin:0; width:100%; display:grid; gap:3px; padding-top:7px; border-top:1px dashed #33425d; font-size:11px; font-variant-numeric:tabular-nums; }
+.mtf-pnl-breakdown div { display:flex; justify-content:space-between; gap:16px; }
+.mtf-pnl-breakdown dt { color:#9bacc6; }
+.mtf-pnl-breakdown dd { margin:0; color:#d3ddef; font-weight:600; white-space:nowrap; }
+.mtf-pnl .mtf-pnl-insight { font-size:11px; color:#a9b8d0; white-space:normal; text-align:left; }
+.mtf-pnl .mtf-pnl-insight.warn { color:#e9c783; }
+.mtf-booked { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin:4px 0 18px; background:#2a3852; border:1px solid #2a3852; border-radius:10px; overflow:hidden; }
+.mtf-booked > div { display:flex; flex-direction:column; gap:4px; padding:14px 18px; background:#131f33; }
+.mtf-booked span { font-size:12px; color:#9bacc6; }
+.mtf-booked strong { font-size:22px; color:#e1eafb; font-variant-numeric:tabular-nums; }
+.mtf-booked small { font-size:11px; color:#8494ae; }
+.mtf-booked .mtf-booked-final { background:#172843; }
+.mtf-booked .mtf-booked-final strong { font-size:26px; }
+.mtf-booked p { grid-column:1 / -1; margin:0; padding:9px 18px; background:#131f33; font-size:12px; color:#a9b8d0; }
+.mtf-booked p.warn { color:#e9c783; }
+@media(max-width:600px){ .mtf-booked { grid-template-columns:1fr; } }
+.mtf-pnl .mtf-return-stack { flex-direction:row; flex-wrap:nowrap; align-items:center; gap:8px; }
+.mtf-mobile-position .mtf-pnl-breakdown { display:grid; grid-template-columns:1fr; gap:4px; margin:0; padding-top:8px; border-top:1px dashed #33425d; }
+.mtf-mobile-position .mtf-pnl-breakdown > div, .mtf-mobile-position .mtf-pnl-breakdown > div:last-child { grid-column:auto; padding:0; border:0; }
+.mtf-mobile-position .mtf-pnl-breakdown dt { font-size:12px; color:#9bacc6; }
+.mtf-mobile-position .mtf-pnl-breakdown dd { margin:0; font-size:13px; }
+.mtf-mobile-position .mtf-pnl { min-width:0; }

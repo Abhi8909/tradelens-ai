@@ -25,7 +25,10 @@ test('manual MTF add, calculations, persistence, edit and greyed exit remove ope
   await page.getByRole('button', { name: 'Add position', exact: true }).click();
   const row = page.locator('.mtf-position-table tbody tr');
   await expect(row).toContainText('30 days'); await expect(row).toContainText('₹100.92'); await expect(row).not.toContainText('100.9200'); await expect(row).toContainText('908.00');
-  await expect(row.locator('.up')).toHaveCount(2);
+  // Net 908 = price gain 1,000 − (72 interest + 20 charges); net, return pill and price gain are green.
+  await expect(row.locator('.up')).toHaveCount(3);
+  await expect(row.locator('.mtf-pnl-breakdown')).toContainText('Price gain so far+₹1,000.00');
+  await expect(row.locator('.mtf-pnl-breakdown')).toContainText('Interest & charges−₹92.00');
   await page.screenshot({ path: '/tmp/tradelens-manual-mtf.png', fullPage: true });
   await page.reload(); await page.getByRole('button', { name: 'MTF Tracker', exact: true }).click();
   await expect(row).toContainText('SYNTHETIC');
@@ -45,7 +48,12 @@ test('manual MTF add, calculations, persistence, edit and greyed exit remove ope
   // 100 × (120 − 100) − 30 days × 2.40 interest − 20 charges
   await expect(page.getByRole('columnheader', { name: /Sold price/ })).toBeVisible();
   await expect(row).toContainText('₹120.00'); await expect(row.locator('.mtf-return-stack strong.up')).toContainText('1,908.00');
-  await expect(row).toContainText('Final profit after all costs');
+  await expect(row.locator('.mtf-pnl-breakdown')).toContainText('Price gain+₹2,000.00');
+  await expect(row.locator('.mtf-pnl-breakdown')).toContainText('Interest & charges−₹92.00');
+  await expect(row).toContainText('Costs took 5% of the price gain');
+  const booked = page.getByRole('region', { name: 'Closed position results' });
+  await expect(booked.locator('.mtf-booked-final strong.up')).toHaveText('+₹1,908.00');
+  await expect(booked).toContainText('1 of 1 closed positions');
   await expect(page.locator('.mtf-coverage strong.up')).toContainText('1,908.00');
   await page.getByRole('button', { name: 'Edit SYNTHETIC', exact: true }).click();
   await page.getByLabel('Exit date (optional)', { exact: true }).fill('');
@@ -78,7 +86,7 @@ test('MTF refreshes every 150 seconds and shows an icon-only date tooltip', asyn
   await expect(tooltip).toHaveText(/^\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(am|pm) IST$/);
   expect(await info.evaluate(element => getComputedStyle(element).cursor)).toBe('pointer');
   await page.mouse.move(0,0); await expect(tooltip).not.toBeVisible(); await info.focus(); await expect(tooltip).toBeVisible(); await page.keyboard.press('Escape'); await expect(tooltip).not.toBeVisible();
-  await page.clock.runFor(150_100); await expect(page.locator('.mtf-position-table tbody tr .down')).toHaveCount(2); expect(calls).toBeGreaterThanOrEqual(2);
+  await page.clock.runFor(150_100); await expect(page.locator('.mtf-position-table tbody tr .down')).toHaveCount(3); expect(calls).toBeGreaterThanOrEqual(2);
 });
 
 test('MTF corrupt saved work is not overwritten', async ({ page }) => {
@@ -140,6 +148,7 @@ test('Exit shortcut records the sold price and shows a red final loss', async ({
   const row = page.locator('.mtf-position-table tbody tr').filter({ hasText: 'SYNTHLOSS' });
   // 100 × (95 − 100) − 10 days × 2.40 interest − 20 charges
   await expect(row).toContainText('₹95.00'); await expect(row.locator('.mtf-return-stack strong.down')).toContainText('544.00');
-  await expect(row).toContainText('Final loss after all costs');
+  await expect(row.locator('.mtf-pnl-breakdown .down')).toHaveText('-₹500.00');
+  await expect(row).toContainText('Costs added ₹44.00 to the price loss');
   await page.screenshot({ path: '/tmp/tradelens-mtf-exit-loss.png', fullPage: true });
 });
